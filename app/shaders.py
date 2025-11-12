@@ -1,0 +1,92 @@
+import pygame as pg
+from pygame.locals import *
+from OpenGL.GL import *
+from OpenGL.GL.shaders import compileProgram, compileShader
+import numpy as np
+
+class ShaderObject:
+    _win_size = (800, 600)
+
+    @classmethod
+    def set_size(cls, size):
+        cls._win_size = size
+
+    with open("app\\shaders\\graphics.vsh", "r") as file:
+        _VERTEX_SHADER = file.read()
+
+    with open("app\\shaders\\graphics.fsh", "r") as file:
+        _FRAGMENT_SHADER = file.read()
+
+    @classmethod
+    def create_shader_program(cls):
+        shader = compileProgram(
+            compileShader(cls._VERTEX_SHADER, GL_VERTEX_SHADER),
+            compileShader(cls._FRAGMENT_SHADER, GL_FRAGMENT_SHADER)
+        )
+        return shader
+
+    @classmethod
+    def init_pygame_opengl(cls):
+        pg.init()
+        display = cls._win_size
+        pg.display.set_mode(display, DOUBLEBUF | OPENGL)
+        pg.display.set_caption("Pygame + OpenGL Shader Example")
+
+        glViewport(0, 0, display[0], display[1])
+        glClearColor(0.1, 0.1, 0.1, 1.0)
+
+    @staticmethod
+    def load_texture(path):
+        surface = pg.image.load(path)
+        image = pg.image.tostring(surface, "RGBA", True)
+        width, height = surface.get_size()
+
+        tex_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex_id)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, image)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
+        return {"texture": tex_id, "width": width, "height": height}
+    
+    @staticmethod
+    def setup_textured_quad():
+        # positions (x, y, z), colors (r, g, b), texcoords (u, v)
+        vertices = np.array([
+            # x,    y,    z,    r, g, b,   u, v
+            -0.5, -0.5, 0.0,   1, 1, 1,    0, 0,
+            0.5, -0.5, 0.0,   1, 1, 1,    1, 0,
+            0.5,  0.5, 0.0,   1, 1, 1,    1, 1,
+            -0.5,  0.5, 0.0,   1, 1, 1,    0, 1,
+        ], dtype=np.float32)
+
+        indices = np.array([
+            0, 1, 2,
+            2, 3, 0
+        ], dtype=np.uint32)
+
+        VAO = glGenVertexArrays(1)
+        VBO = glGenBuffers(1)
+        EBO = glGenBuffers(1)
+
+        glBindVertexArray(VAO)
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO)
+        glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
+
+        stride = 8 * vertices.itemsize
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+        glEnableVertexAttribArray(1)
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(24))
+        glEnableVertexAttribArray(2)
+
+        return VAO, EBO

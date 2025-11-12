@@ -30,7 +30,7 @@ class ShaderObject:
         pg.init()
         display = cls._win_size
         pg.display.set_mode(display, DOUBLEBUF | OPENGL)
-        pg.display.set_caption("Pygame + OpenGL Shader Example")
+        pg.display.set_caption("test")
 
         glViewport(0, 0, display[0], display[1])
         glClearColor(0.1, 0.1, 0.1, 1.0)
@@ -55,9 +55,7 @@ class ShaderObject:
     
     @staticmethod
     def setup_textured_quad():
-        # positions (x, y, z), colors (r, g, b), texcoords (u, v)
         vertices = np.array([
-            # x,    y,    z,    r, g, b,   u, v
             -0.5, -0.5, 0.0,   1, 1, 1,    0, 0,
             0.5, -0.5, 0.0,   1, 1, 1,    1, 0,
             0.5,  0.5, 0.0,   1, 1, 1,    1, 1,

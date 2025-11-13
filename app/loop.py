@@ -42,11 +42,15 @@ class Loop:
         FPS = 60
 
         Texture.set_texture("faca", "facarambit.webp")
+        Texture.set_texture("hitler", "cachorro.jpg")
+        Texture.set_texture("grass", "app\\sources\\grass.png")
         entity = []
-        entity.append(Entity((200, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
-        entity.append(Entity((300, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
-        entity.append(Entity((400, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
-        entity.append(Entity((500, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
+        entity.append(Entity((200, 200), Texture.get_texture("grass"), (320, 150), 0, 0))
+        entity.append(Entity((520, 200), Texture.get_texture("grass"), (320, 150), 0, 3))
+        entity.append(Entity((840, 200), Texture.get_texture("grass"), (320, 150), 0, 0))
+        entity.append(Entity((680, 280), Texture.get_texture("grass"), (320, 150), 0, 2))
+        entity.append(Entity((1160, 200), Texture.get_texture("grass"), (320, 150), 0, 2))
+        entity.append(Entity((1160, 200), Texture.get_texture("grass"), (320, 150), 0, 2))
         EntityManager.create_entity(entity)
 
         while running:
@@ -59,7 +63,7 @@ class Loop:
             entities = EntityManager.get_all_entities()
             for layer in EntityManager.get_content_layers():
                 for entity in entities[layer]:
-                    ShaderObject.render(entity)
+                    cls.render_entity(entity)
 
             pg.display.flip()
             clock.tick(FPS)

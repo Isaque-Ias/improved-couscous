@@ -29,11 +29,21 @@ class ShaderObject:
     def init_pygame_opengl(cls):
         pg.init()
         display = cls._win_size
+
+        pg.display.gl_set_attribute(pg.GL_MULTISAMPLEBUFFERS, 0)
+        pg.display.gl_set_attribute(pg.GL_MULTISAMPLESAMPLES, 0)
+
+        pg.display.gl_set_attribute(pg.GL_ALPHA_SIZE, 8)
         pg.display.set_mode(display, DOUBLEBUF | OPENGL)
         pg.display.set_caption("test")
 
         glViewport(0, 0, display[0], display[1])
-        glClearColor(0.1, 0.1, 0.1, 1.0)
+        glDisable(GL_MULTISAMPLE)
+        
+        glClearColor(0.0, 0.0, 0.0, 0.0)
+
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
     @staticmethod
     def load_texture(path):
@@ -45,8 +55,8 @@ class ShaderObject:
         glBindTexture(GL_TEXTURE_2D, tex_id)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                     GL_RGBA, GL_UNSIGNED_BYTE, image)
 

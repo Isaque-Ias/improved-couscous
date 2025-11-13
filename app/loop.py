@@ -13,6 +13,13 @@ class Loop:
     def set_title(cls, t):
         cls._title = t
 
+    def render_entity(entity):
+        mvp = entity.get_mvp()
+        glUniformMatrix4fv(u_mvp_loc, 1, GL_FALSE, mvp)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, entity.get_texture())
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
+
     @classmethod
     def start(cls):
         screen_size = (1500, 500)
@@ -23,6 +30,7 @@ class Loop:
         VAO, EBO = ShaderObject.setup_textured_quad()
 
         glUseProgram(shader)
+        global u_mvp_loc, u_tex_loc
         u_mvp_loc = glGetUniformLocation(shader, "u_mvp")
         u_tex_loc = glGetUniformLocation(shader, "u_texture")
 
@@ -48,12 +56,10 @@ class Loop:
 
             glClear(GL_COLOR_BUFFER_BIT)
 
-            for entity in EntityManager.get_all_layer_entities():
-                mvp = entity.get_mvp()
-                glUniformMatrix4fv(u_mvp_loc, 1, GL_FALSE, mvp)
-                glActiveTexture(GL_TEXTURE0)
-                glBindTexture(GL_TEXTURE_2D, entity.get_texture())
-                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
+            entities = EntityManager.get_all_entities()
+            for layer in EntityManager.get_content_layers():
+                for entity in entities[layer]:
+                    ShaderObject.render(entity)
 
             pg.display.flip()
             clock.tick(FPS)

@@ -9,7 +9,10 @@ class Entity:
         self.set_layer(layer)
 
     def set_layer(self, layer):
-        self.layer = layer
+        if not self.layer == layer: 
+            
+
+            self.layer = layer
 
     def tick(self):
         pass
@@ -25,17 +28,17 @@ class Entity:
 
 class EntityManager:
     _entities = {}
+    _content = []
     _id = 0
 
     @classmethod
-    def get_all_layer_entities(cls):
-        entities = []
-        for layer in cls._content_layers:
-            for entity in cls._entities[layer]:
-                entities.append(entity)
-                
-        return entities
-    
+    def get_all_entities(cls):
+        return cls._entities
+
+    @classmethod
+    def get_content_layers(cls):
+        return cls._content
+
     @classmethod
     def create_entity(cls, entity):
         if type(entity) == list:

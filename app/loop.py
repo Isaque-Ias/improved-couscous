@@ -2,9 +2,9 @@ import pygame as pg
 from pygame.locals import *
 from shaders import ShaderObject
 from OpenGL.GL import *
-import numpy as np
-import time
 from transformations import Transformation
+from entity import EntityManager, Entity
+from texture import Texture
 
 class Loop:
     _title = "[Default Title]"
@@ -22,11 +22,6 @@ class Loop:
         shader = ShaderObject.create_shader_program()
         VAO, EBO = ShaderObject.setup_textured_quad()
 
-        textures = [
-            ShaderObject.load_texture("facarambit.webp")["texture"],
-            ShaderObject.load_texture("cachorro.jpg")["texture"],
-            ShaderObject.load_texture("cachorro.jpg")["texture"]
-        ]
         glUseProgram(shader)
         u_mvp_loc = glGetUniformLocation(shader, "u_mvp")
         u_tex_loc = glGetUniformLocation(shader, "u_texture")
@@ -35,7 +30,16 @@ class Loop:
 
         running = True
         clock = pg.time.Clock()
-        start_time = time.time()
+
+        FPS = 60
+
+        Texture.set_texture("faca", "facarambit.webp")
+        entity = []
+        entity.append(Entity((200, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
+        entity.append(Entity((300, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
+        entity.append(Entity((400, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
+        entity.append(Entity((500, 200), Texture.get_texture("faca"), (200, 200), 34, 0))
+        EntityManager.create_entity(entity)
 
         while running:
             for event in pg.event.get():
@@ -44,21 +48,15 @@ class Loop:
 
             glClear(GL_COLOR_BUFFER_BIT)
 
-            current_time = time.time() - start_time
-
-            transforms = [
-                Transformation.affine_transform(( 600, 0), (200, 200), current_time),
-                Transformation.affine_transform((  100, 0), (200, 200), -current_time * 0.5),
-                Transformation.affine_transform((  400, 150), (100, 100), 0)
-            ]
-            
-            for tex_id, mvp in zip(textures, transforms):
+            for entity in EntityManager.get_all_layer_entities():
+                mvp = entity.get_mvp()
                 glUniformMatrix4fv(u_mvp_loc, 1, GL_FALSE, mvp)
                 glActiveTexture(GL_TEXTURE0)
-                glBindTexture(GL_TEXTURE_2D, tex_id)
+                glBindTexture(GL_TEXTURE_2D, entity.get_texture())
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
+
             pg.display.flip()
-            clock.tick(60)
+            clock.tick(FPS)
 
 if __name__ == "__main__":
     Loop.start()

@@ -98,3 +98,10 @@ class ShaderObject:
         glEnableVertexAttribArray(2)
 
         return VAO, EBO
+    
+    def render(object, u_mvp_loc):
+        mvp = object.get_mvp()
+        glUniformMatrix4fv(u_mvp_loc, 1, GL_FALSE, mvp)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, object.get_texture())
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)

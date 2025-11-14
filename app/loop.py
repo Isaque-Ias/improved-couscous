@@ -40,18 +40,28 @@ class Loop:
         Texture.set_texture("grass", "app\\sources\\grass.png")
 
         entity = []
+        k = Entity((520, 200), Texture.get_texture("grass"), (320, 150), 0, 3)
         entity.append(Entity((200, 200), Texture.get_texture("grass"), (320, 150), 0, 0))
-        entity.append(Entity((520, 200), Texture.get_texture("grass"), (320, 150), 0, 3))
+        entity.append(k)
         entity.append(Entity((840, 200), Texture.get_texture("grass"), (320, 150), 0, 0))
         entity.append(Entity((680, 280), Texture.get_texture("grass"), (320, 150), 0, 2))
         entity.append(Entity((1160, 200), Texture.get_texture("grass"), (320, 150), 0, 2))
         entity.append(Entity((1160, 200), Texture.get_texture("grass"), (320, 150), 0, 2))
         EntityManager.create_entity(entity)
 
-        Input.set_keys()
+        Input.set_keys(K_w, K_a, K_s, K_d)
 
         while running:
             Input.update()
+
+            if Input.get_press(K_w):
+                k.y -= 5
+            if Input.get_press(K_a):
+                k.x -= 5
+            if Input.get_press(K_s):
+                k.y += 5
+            if Input.get_press(K_d):
+                k.x += 5
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:

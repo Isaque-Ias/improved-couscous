@@ -3,9 +3,11 @@ from tools import Tools
 
 class Entity:
     def __init__(self, pos, image=None, scale=(0, 0), angle=0, layer=0):
-        self.pos = pos
+        self.x = pos[0]
+        self.y = pos[1]
         self.image = image
-        self.scale = scale
+        self.width = scale[0]
+        self.height = scale[1]
         self.angle = angle
         self.layer = layer
 
@@ -22,7 +24,7 @@ class Entity:
         pass
 
     def get_mvp(self):
-        return Transformation.affine_transform(self.pos, self.scale, self.angle)
+        return Transformation.affine_transform((self.x, self.y), (self.width, self.height), self.angle)
 
     def get_texture(self):
         return self.image["texture"]

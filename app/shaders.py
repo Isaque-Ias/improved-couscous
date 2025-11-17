@@ -45,6 +45,10 @@ class ShaderObject:
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+    @classmethod
+    def set_mvp(cls, mvp):
+        cls.u_mvp_loc = mvp
+
     @staticmethod
     def load_texture(path):
         surface = pg.image.load(path)
@@ -99,9 +103,9 @@ class ShaderObject:
 
         return VAO, EBO
     
-    def render(object, u_mvp_loc):
-        mvp = object.get_mvp()
-        glUniformMatrix4fv(u_mvp_loc, 1, GL_FALSE, mvp)
+    @classmethod
+    def render(cls, mvp, texture):
+        glUniformMatrix4fv(cls.u_mvp_loc, 1, GL_FALSE, mvp)
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, object.get_texture())
+        glBindTexture(GL_TEXTURE_2D, texture["texture"])
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)

@@ -6,6 +6,8 @@ from transformations import Transformation
 from entity import EntityManager, Entity
 from texture import Texture
 from inputting import Input
+from game import Map
+from camera import Camera
 
 class Loop:
     _title = "[Default Title]"
@@ -27,6 +29,7 @@ class Loop:
         global u_mvp_loc, u_tex_loc
         u_mvp_loc = glGetUniformLocation(shader, "u_mvp")
         u_tex_loc = glGetUniformLocation(shader, "u_texture")
+        ShaderObject.set_mvp(u_mvp_loc)
 
         glUniform1i(u_tex_loc, 0)
 
@@ -39,29 +42,19 @@ class Loop:
         Texture.set_texture("hitler", "cachorro.jpg")
         Texture.set_texture("grass", "app\\sources\\grass.png")
 
-        entity = []
-        k = Entity((520, 200), Texture.get_texture("grass"), (320, 150), 0, 3)
-        entity.append(Entity((200, 200), Texture.get_texture("grass"), (320, 150), 0, 0))
-        entity.append(k)
-        entity.append(Entity((840, 200), Texture.get_texture("grass"), (320, 150), 0, 0))
-        entity.append(Entity((680, 280), Texture.get_texture("grass"), (320, 150), 0, 2))
-        entity.append(Entity((1160, 200), Texture.get_texture("grass"), (320, 150), 0, 2))
-        entity.append(Entity((1160, 200), Texture.get_texture("grass"), (320, 150), 0, 2))
+        EntityManager.set_mvp(u_mvp_loc)
+
+        cam = Camera.get_main_camera()
+        cam.set_pos((200, 2))
+
+        entity = [Map()]
+
         EntityManager.create_entity(entity)
 
         Input.set_keys(K_w, K_a, K_s, K_d)
 
         while running:
             Input.update()
-
-            if Input.get_press(K_w):
-                k.y -= 5
-            if Input.get_press(K_a):
-                k.x -= 5
-            if Input.get_press(K_s):
-                k.y += 5
-            if Input.get_press(K_d):
-                k.x += 5
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
@@ -72,7 +65,8 @@ class Loop:
             entities = EntityManager.get_all_entities()
             for layer in EntityManager.get_content_layers():
                 for entity in entities[layer]:
-                    ShaderObject.render(entity, u_mvp_loc)
+                    entity.tick()
+                    entity.draw()
 
             pg.display.flip()
             clock.tick(FPS)

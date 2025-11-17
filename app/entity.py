@@ -1,5 +1,26 @@
 from transformations import Transformation
 from tools import Tools
+from shaders import ShaderObject
+from texture import Texture
+
+class EntityTools:
+    @staticmethod
+    def tex(tex):
+        return Texture.get_texture(tex)
+
+    @staticmethod
+    def default_mvp(entity):
+        return Transformation.affine_transform((entity.x, entity.y), (entity.width, entity.height), entity.angle)
+
+    @staticmethod
+    def default_draw(entity):
+        ShaderObject.render(entity)
+
+    @staticmethod
+    def draw_image(image, pos, scale, angle):
+        mvp = Transformation.affine_transform(pos, scale, angle)
+        tex = EntityTools.tex(image)
+        ShaderObject.render(mvp, tex)
 
 class Entity:
     def __init__(self, pos, image=None, scale=(0, 0), angle=0, layer=0):
@@ -24,7 +45,7 @@ class Entity:
         pass
 
     def get_mvp(self):
-        return Transformation.affine_transform((self.x, self.y), (self.width, self.height), self.angle)
+        pass
 
     def get_texture(self):
         return self.image["texture"]
@@ -39,6 +60,10 @@ class EntityManager:
     _entities = {}
     _content = []
     _id = 0
+
+    @classmethod
+    def set_mvp(cls, mvp):
+        cls._mvp = mvp
 
     @classmethod
     def remove_entity_layer(cls, entity):
@@ -74,6 +99,7 @@ class EntityManager:
             entity = [entity]
 
         for element in entity:
+            element.mvp = cls._mvp
             element.set_id(cls._id)
             
             cls.add_entity_layer(element)

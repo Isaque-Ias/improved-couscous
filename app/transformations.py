@@ -1,5 +1,6 @@
 import numpy as np
 from math import sin, cos
+from camera import Camera
 
 class Transformation:
     _window_size = (0, 0)
@@ -9,6 +10,8 @@ class Transformation:
 
     @classmethod
     def affine_transform(cls, pos, scale, angle):
+        main_cam = Camera.get_main_camera()
+        cam_pos = main_cam.get_pos()
         c, s = cos(angle), sin(angle)
 
         rotation_z = np.array([
@@ -25,8 +28,8 @@ class Transformation:
             [0, 0, 0, 1]
         ], dtype=np.float32)
 
-        tx = pos[0] * 2 / cls._window_size[0]
-        ty = pos[1] * 2 / cls._window_size[1]
+        tx = (pos[0] - cam_pos[0]) * 2 / cls._window_size[0]
+        ty = (pos[1] - cam_pos[1]) * 2 / cls._window_size[1]
         translation = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],

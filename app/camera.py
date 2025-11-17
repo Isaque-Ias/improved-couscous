@@ -23,7 +23,7 @@ class Cam:
         return self._angle
 
 class Camera:
-    _cams = {"main": Cam((0, 0), (1366, 768), 0)}
+    _cams = {"main": Cam((0, 0), (1500, 500), 0)}
     _main = "main"
 
     @classmethod

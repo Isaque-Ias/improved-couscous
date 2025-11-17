@@ -5,11 +5,15 @@ from OpenGL.GL.shaders import compileProgram, compileShader
 import numpy as np
 
 class ShaderObject:
-    _win_size = (800, 600)
+    screen_size = (800, 600)
 
     @classmethod
     def set_size(cls, size):
-        cls._win_size = size
+        cls.screen_size = size
+
+    @classmethod
+    def get_size(cls):
+        return cls.screen_size
 
     with open("app\\shaders\\graphics.vsh", "r") as file:
         _VERTEX_SHADER = file.read()
@@ -28,7 +32,7 @@ class ShaderObject:
     @classmethod
     def init_pygame_opengl(cls):
         pg.init()
-        display = cls._win_size
+        display = cls.screen_size
 
         pg.display.gl_set_attribute(pg.GL_MULTISAMPLEBUFFERS, 0)
         pg.display.gl_set_attribute(pg.GL_MULTISAMPLESAMPLES, 0)

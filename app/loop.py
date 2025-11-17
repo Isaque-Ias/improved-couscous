@@ -3,10 +3,10 @@ from pygame.locals import *
 from shaders import ShaderObject
 from OpenGL.GL import *
 from transformations import Transformation
-from entity import EntityManager, Entity
+from entity import EntityManager
 from texture import Texture
 from inputting import Input
-from game import Map
+from game import Map, Player
 from camera import Camera
 
 class Loop:
@@ -18,7 +18,7 @@ class Loop:
 
     @classmethod
     def start(cls):
-        screen_size = (1500, 500)
+        screen_size = (500, 500)
         Transformation.set_size(screen_size)
         ShaderObject.set_size(screen_size)
         ShaderObject.init_pygame_opengl()
@@ -41,13 +41,15 @@ class Loop:
         Texture.set_texture("faca", "facarambit.webp")
         Texture.set_texture("hitler", "cachorro.jpg")
         Texture.set_texture("grass", "app\\sources\\grass.png")
+        Texture.set_texture("player", "app\\sources\\player.png")
 
         EntityManager.set_mvp(u_mvp_loc)
 
         cam = Camera.get_main_camera()
-        cam.set_pos((200, 2))
+        cam.set_scale((1500, 500))
+        ang = 0
 
-        entity = [Map()]
+        entity = [Map(), Player((200, 200))]
 
         EntityManager.create_entity(entity)
 
@@ -55,6 +57,9 @@ class Loop:
 
         while running:
             Input.update()
+
+            if Input.get_press(K_w):
+                cam.set_angle(ang)
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:

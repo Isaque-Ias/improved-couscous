@@ -5,6 +5,10 @@ from texture import Texture
 
 class EntityTools:
     @staticmethod
+    def get_screen_size():
+        return ShaderObject.get_size()
+
+    @staticmethod
     def tex(tex):
         return Texture.get_texture(tex)
 
@@ -14,7 +18,7 @@ class EntityTools:
 
     @staticmethod
     def default_draw(entity):
-        ShaderObject.render(entity)
+        ShaderObject.render(entity.get_mvp(), Texture.get_texture(entity.image))
 
     @staticmethod
     def draw_image(image, pos, scale, angle):
@@ -42,10 +46,10 @@ class Entity:
         pass
 
     def draw(self):
-        pass
+        EntityTools.default_draw(self)
 
     def get_mvp(self):
-        pass
+        return EntityTools.default_mvp(self)
 
     def get_texture(self):
         return self.image["texture"]

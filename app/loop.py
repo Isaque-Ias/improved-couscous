@@ -18,7 +18,7 @@ class Loop:
 
     @classmethod
     def start(cls):
-        screen_size = (500, 500)
+        screen_size = (1366, 768)
         Transformation.set_size(screen_size)
         ShaderObject.set_size(screen_size)
         ShaderObject.init_pygame_opengl()
@@ -38,28 +38,21 @@ class Loop:
 
         FPS = 60
 
-        Texture.set_texture("faca", "facarambit.webp")
-        Texture.set_texture("hitler", "cachorro.jpg")
         Texture.set_texture("grass", "app\\sources\\grass.png")
         Texture.set_texture("player", "app\\sources\\player.png")
 
         EntityManager.set_mvp(u_mvp_loc)
 
         cam = Camera.get_main_camera()
-        cam.set_scale((1500, 500))
-        ang = 0
+        cam.set_scale((4, 4))
 
-        entity = [Map(), Player((200, 200))]
-
-        EntityManager.create_entity(entity)
+        Map()
+        Player((200, 200))
 
         Input.set_keys(K_w, K_a, K_s, K_d)
 
         while running:
             Input.update()
-
-            if Input.get_press(K_w):
-                cam.set_angle(ang)
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:

@@ -41,8 +41,8 @@ class Transformation:
         ], dtype=np.float32)
 
         cam_scaling = np.array([
-            [(cls._window_size[0] / cam_scale[0]) * scale[0] / scale[0], 0, 0, 0],
-            [0, (cls._window_size[1] / cam_scale[1]) * scale[1] / scale[0], 0, 0],
+            [cam_scale[1], 0, 0, 0],
+            [0, cam_scale[0] * cls._window_size[1] / cls._window_size[0], 0, 0],
             [0, 0, 1, 0],
             [0, 0, 0, 1]
         ], dtype=np.float32)

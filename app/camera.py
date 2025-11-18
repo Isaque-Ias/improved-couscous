@@ -46,3 +46,7 @@ class Camera:
     @classmethod
     def get_main_camera(cls):
         return cls._cams[cls._main]
+
+    @classmethod
+    def get_camera(cls, name):
+        return cls._cams[name]

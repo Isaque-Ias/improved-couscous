@@ -2,8 +2,13 @@ from transformations import Transformation
 from tools import Tools
 from shaders import ShaderObject
 from texture import Texture
+from camera import Camera
 
 class EntityTools:
+    @staticmethod
+    def get_cam(cam):
+        return Camera.get_camera(cam)
+
     @staticmethod
     def get_screen_size():
         return ShaderObject.get_size()
@@ -36,6 +41,8 @@ class Entity:
         self.angle = angle
         self.layer = layer
 
+        EntityManager.create_entity(self)
+        
     def set_layer(self, layer):
         if not self.layer == layer:
             EntityManager.remove_entity_layer(self)

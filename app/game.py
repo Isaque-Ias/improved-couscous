@@ -6,7 +6,7 @@ from inputting import Input
 class Map(Entity):
     def __init__(self):
         super().__init__((0, 0), et.tex("grass"))
-        self.blocks = [[0 for _ in range(20)] for _ in range(20)]
+        self.blocks = [[0 for _ in range(2)] for _ in range(2)]
         for line in range(len(self.blocks)):
             for block in range(len(self.blocks[line])):
                 y_pos = 250 + 8 * block - 8 * line
@@ -23,6 +23,9 @@ class Map(Entity):
 class Block(Entity):
     def __init__(self, pos, image):
         super().__init__(pos, image, (32.1, 15.1))
+
+    def __str__(self):
+        return "f"
 
 class Player(Entity):
     def __init__(self, pos):

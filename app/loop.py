@@ -60,6 +60,9 @@ class Loop:
 
             glClear(GL_COLOR_BUFFER_BIT)
 
+            print(EntityManager.get_all_entities())
+            print(EntityManager.get_content_layers())
+
             entities = EntityManager.get_all_entities()
             for layer in EntityManager.get_content_layers():
                 for entity in entities[layer]:

@@ -66,6 +66,9 @@ class Entity:
 
     def get_id(self):
         return self._id
+    
+    def __str__(self):
+        return f"{type(self).__name__} - {self._id}"
 
 class EntityManager:
     _entities = {}

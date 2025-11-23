@@ -15,17 +15,11 @@ class ShaderObject:
     def get_size(cls):
         return cls.screen_size
 
-    with open("app\\shaders\\graphics.vsh", "r") as file:
-        _VERTEX_SHADER = file.read()
-
-    with open("app\\shaders\\graphics.fsh", "r") as file:
-        _FRAGMENT_SHADER = file.read()
-
-    @classmethod
-    def create_shader_program(cls):
+    @staticmethod
+    def create_shader_program(vertex, fragment):
         shader = compileProgram(
-            compileShader(cls._VERTEX_SHADER, GL_VERTEX_SHADER),
-            compileShader(cls._FRAGMENT_SHADER, GL_FRAGMENT_SHADER)
+            compileShader(vertex, GL_VERTEX_SHADER),
+            compileShader(fragment, GL_FRAGMENT_SHADER)
         )
         return shader
 
@@ -52,6 +46,11 @@ class ShaderObject:
     @classmethod
     def set_mvp(cls, mvp):
         cls.u_mvp_loc = mvp
+
+    @classmethod
+    def set_shader(cls, shader, mvp):
+        glUseProgram(shader)
+        cls.set_mvp(mvp)
 
     @staticmethod
     def load_texture(path):

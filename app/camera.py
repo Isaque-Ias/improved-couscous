@@ -1,8 +1,10 @@
 class Cam:
-    def __init__(self, pos, scale, angle):
-        self._pos = pos
-        self._scale = scale
-        self._angle = angle
+    def __init__(self, pos, scale, angle, name):
+        self.set_name(name)
+        self.set_pos(pos)
+        self.set_scale(scale)
+        self.set_angle(angle)
+
 
     def set_pos(self, pos):
         self._pos = pos
@@ -13,6 +15,9 @@ class Cam:
     def set_angle(self, angle):
         self._angle = angle
 
+    def set_name(self, name):
+        self._name = name
+
     def get_pos(self):
         return self._pos
 
@@ -22,8 +27,11 @@ class Cam:
     def get_angle(self):
         return self._angle
 
+    def get_name(self):
+        return self._name
+
 class Camera:
-    _cams = {"main": Cam((0, 0), (1500, 500), 0)}
+    _cams = {"main": Cam((0, 0), (1500, 500), 0, "main")}
     _main = "main"
 
     @classmethod
@@ -31,7 +39,7 @@ class Camera:
         if cls._cams.get(name):
             raise KeyError
         
-        cam = Cam((0, 0), (0, 0), 0)
+        cam = Cam((0, 0), (0, 0), 0, name)
         cls._cams[name] = cam
         return cam
     

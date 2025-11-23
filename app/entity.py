@@ -32,7 +32,7 @@ class EntityTools:
         ShaderObject.render(mvp, tex)
 
 class Entity:
-    def __init__(self, pos, image=None, scale=(0, 0), angle=0, layer=0):
+    def __init__(self, pos, image=None, scale=(0, 0), angle=0, layer=0, has_layer=True):
         self.x = pos[0]
         self.y = pos[1]
         self.image = image
@@ -40,8 +40,8 @@ class Entity:
         self.height = scale[1]
         self.angle = angle
         self.layer = layer
-
-        EntityManager.create_entity(self)
+        if has_layer:
+            EntityManager.create_entity(self)
         
     def set_layer(self, layer):
         if not self.layer == layer:
@@ -88,6 +88,7 @@ class EntityManager:
         if len(cls._entities[entity.layer]) == 0:
             index = Tools.binary_search(entity.layer, cls._content, len(cls._content))
             cls._content.pop(index)
+            cls._entities.pop(entity.layer)
 
     @classmethod
     def add_entity_layer(cls, entity):

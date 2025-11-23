@@ -6,7 +6,7 @@ from transformations import Transformation
 from entity import EntityManager
 from texture import Texture
 from inputting import Input
-from game import Map, Player, Background
+from game import Map, Player
 from camera import Camera
 from testing import Testing
 
@@ -20,15 +20,10 @@ class Loop:
     @classmethod
     def start(cls):
 
-        with open("app\\shaders\\graphics.vsh", "r") as file:
+        with open("app\\shaders\\def.vsh", "r") as file:
             DEF_VERTEX_SHADER = file.read()
-        with open("app\\shaders\\graphics.fsh", "r") as file:
+        with open("app\\shaders\\def.fsh", "r") as file:
             DEF_FRAGMENT_SHADER = file.read()
-
-        with open("app\\shaders\\background.vsh", "r") as file:
-            BG_VERTEX_SHADER = file.read()
-        with open("app\\shaders\\background.fsh", "r") as file:
-            BG_FRAGMENT_SHADER = file.read()
 
         with open("app\\shaders\\map.vsh", "r") as file:
             MAP_VERTEX_SHADER = file.read()
@@ -40,7 +35,6 @@ class Loop:
         ShaderObject.set_size(screen_size)
         ShaderObject.init_pygame_opengl()
         default_shader = ShaderObject.create_shader_program(DEF_VERTEX_SHADER, DEF_FRAGMENT_SHADER)
-        background_shader = ShaderObject.create_shader_program(BG_VERTEX_SHADER, BG_FRAGMENT_SHADER)
         map_shader = ShaderObject.create_shader_program(MAP_VERTEX_SHADER, MAP_FRAGMENT_SHADER)
         ShaderObject.setup_textured_quad()
 
@@ -53,7 +47,6 @@ class Loop:
         Texture.set_texture("pixel", "app\\sources\\pixel.png")
 
         glUseProgram(default_shader)
-        # bg_u_mvp_loc = glGetUniformLocation(background_shader, "u_mvp")
 
         map_u_mvp_loc = glGetUniformLocation(map_shader, "u_mvp")
         map_u_player_loc = glGetUniformLocation(map_shader, "u_player")
@@ -72,7 +65,6 @@ class Loop:
 
         player = Player((0, 0))
         game_map = Map()
-        # bg = Background()
 
         Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE)
 
@@ -84,17 +76,16 @@ class Loop:
             glClear(GL_COLOR_BUFFER_BIT)
             glClearColor(98 / 255, 168 / 255, 242 / 255, 0.0)
 
-            # ShaderObject.set_shader(background_shader, bg_u_mvp_loc)
-            # bg.tick()
-            # bg.draw()
-
             ShaderObject.set_shader(map_shader, map_u_mvp_loc)
             glUniform1i(map_u_time_loc, game_map.time)
             glUniform2f(map_u_player_loc, player.x, player.y)
+            
             main_cam_x, main_cam_y = Camera.get_main_camera().get_pos()
-            glUniform2f(map_u_cam_loc, main_cam_x, main_cam_y)
             main_cam_sc_x, main_cam_sc_y = Camera.get_main_camera().get_scale()
+            
+            glUniform2f(map_u_cam_loc, main_cam_x, main_cam_y)
             glUniform2f(map_u_cam_scale_loc, main_cam_sc_x, main_cam_sc_y)
+
             glUniform2f(map_u_screen_loc, screen_size[0], screen_size[1])
 
             game_map.tick()

@@ -28,8 +28,7 @@ class EntityTools:
     @staticmethod
     def draw_image(image, pos, scale, angle):
         mvp = Transformation.affine_transform(pos, scale, angle)
-        tex = EntityTools.tex(image)
-        ShaderObject.render(mvp, tex)
+        ShaderObject.render(mvp, image)
 
 class Entity:
     def __init__(self, pos, image=None, scale=(0, 0), angle=0, layer=0, has_layer=True):

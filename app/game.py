@@ -2,41 +2,77 @@ from entity import Entity
 from entity import EntityTools as et
 from pygame.locals import *
 from inputting import Input
+from PIL import Image
+import pygame as pg
+import random
+from shaders import ShaderObject
+from transformations import Transformation
+
+def pygame_surface_to_pil(surface):
+    data = pg.image.tostring(surface, "RGBA", True)
+    width, height = surface.get_size()
+    return Image.frombytes("RGBA", (width, height), data)
+
+def build_chunk_atlas(tiles, tile_w, tile_h):
+    cols = 8
+    rows = 8
+    atlas_w = cols * tile_w
+    atlas_h = rows * (tile_h + 1) - 1
+    
+    atlas = Image.new("RGBA", (atlas_w, atlas_h))
+
+    for i, tile in enumerate(tiles):
+        x_grid = (i % cols)
+        y_grid = (i // cols)
+        hh = (tile_h // 2 + 1)
+        hw = tile_w // 2
+        x = hw * x_grid + hw * y_grid
+        y = hh * x_grid - hh * y_grid + atlas_h // 2 - tile_h // 2
+        atlas.paste(pygame_surface_to_pil(tile), (x, y), pygame_surface_to_pil(tile))
+
+    return atlas
 
 class Map(Entity):
+    chunks = {}
     def __init__(self):
-        super().__init__((0, 0), et.tex("grass"))
-        map_width = 5
-        map_height = 5
-        self.blocks = [[0 for _ in range(map_width)] for _ in range(map_height)]
-        for line in range(len(self.blocks)):
-            for block in range(len(self.blocks[line])):
-                y_pos = 250 + 8 * block - 8 * line
-                block = Block((16 * block + 16 * line, y_pos), "grass")
-                block.set_layer(y_pos)
+        super().__init__((0, 0), None, has_layer=False)
+        self.time = 0
+        self.time_cap = 24000
+        
+        grass_surf = pg.image.load(f"app\\sources\\grass.png").convert_alpha()
+        sand_surf = pg.image.load(f"app\\sources\\sand.png").convert_alpha()
+
+        for x in range(3):
+            for y in range(3):
+                chunk_sprites = [random.choice([grass_surf, sand_surf]) for _ in range(64)]
+                atlas_tex = build_chunk_atlas(chunk_sprites, 32, 15)
+                self.chunks[f"{x},{y}"] = ShaderObject.add_texture(atlas_tex)
 
     def tick(self):
-        pass
+        self.time += 1
+        if self.time >= self.time_cap:
+            self.time = 0
+        print(player.x, player.y)
 
     def draw(self):
-        pass
-
-class Block(Entity):
-    def __init__(self, pos, image):
-        super().__init__(pos, image, (32.1, 15.1))
-
-    def __str__(self):
-        return "f"
+        for key in self.chunks.keys():
+            chunk_x, chunk_y = map(int, key.split(","))
+            hw = 32 * 8 // 2
+            hh = 15 * 8 // 2 + .5
+            chunk_draw_x = hw * chunk_x + hw * chunk_y
+            chunk_draw_y = hh * chunk_x - hh * chunk_y
+            et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, 15 * 8 + 0.1), 0)
 
 class Player(Entity):
     def __init__(self, pos):
         super().__init__(pos, "player", (16, 16), layer=30)
         self.cam = et.get_cam("main")
         self.z = 0
-        self.grv = 0.4
+        self.grv = 0.2
         self.speed = .3
         self.vel_x = 0
         self.vel_y = 0
+        self.vel_z = 0
 
         vh, vw = et.get_screen_size()
         self.cam_follow_pos = [(self.x - vh / 2), (self.y - vw / 2)]
@@ -44,9 +80,15 @@ class Player(Entity):
     def tick(self):
         self.x += self.vel_x
         self.y += self.vel_y
+        self.z += self.vel_z
 
         self.vel_x *= 0.75
         self.vel_y *= 0.75
+
+        if self.z < 0:
+            self.z = 0
+        else:
+            self.vel_z -= self.grv
 
         if Input.get_press(K_w):
             self.vel_y -= self.speed * 0.5
@@ -56,6 +98,8 @@ class Player(Entity):
             self.vel_y += self.speed * 0.5
         if Input.get_press(K_d):
             self.vel_x += self.speed
+        if Input.get_press(K_SPACE) and self.z == 0:
+            self.vel_z = 2
 
         self.set_layer(self.y + 24)
 
@@ -63,6 +107,9 @@ class Player(Entity):
         self.cam_follow_pos[0] -= ((self.cam_follow_pos[0]) - (self.x - vh / 2)) / 5
         self.cam_follow_pos[1] -= ((self.cam_follow_pos[1]) - (self.y - vw / 2)) / 5
         self.cam.set_pos(self.cam_follow_pos)
+
+    def get_mvp(self):
+        return Transformation.affine_transform((self.x, self.y - self.z - 3), (self.width, self.height), self.angle)
 
 class Background(Entity):
     def __init__(self):

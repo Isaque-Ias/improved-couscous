@@ -6,6 +6,7 @@ in vec2 v_texcoord;
 out vec4 FragColor;
 
 uniform sampler2D u_texture;
+uniform vec2 u_player;
 uniform vec2 u_cam;
 uniform vec2 u_cam_scale;
 uniform vec2 u_screen;
@@ -16,9 +17,19 @@ vec4 mix_rgb(vec4 color_a, vec4 color_b, float t) {
     return vec4(rgb, color_a.a);
 }
 
+float f_pi = 3.1415;
+vec4 eveningColor = vec4(250.0 / 255.0, 165.0 / 255.0, 45.0 / 255.0, 1.0);
+vec4 morningColor = vec4(107.0 / 255.0, 195.0 / 255.0, 255.0 / 255.0, 1.0);
+
+vec4 interp(vec4 color_a, vec4 color_b, float t, float min_v, float max_v) {
+    return mix_rgb(color_a, color_b, max(min_v, min(max_v, (cos(2.0 * f_pi * t / 24000.0) * 3.0 + 1.0) / 2.0)));
+}
+
 void main()
 {
     vec4 texColor = texture(u_texture, v_texcoord);
     FragColor = texColor * vec4(v_color, 1.0);
-    //float dist = distance(vec2(gl_FragCoord.x, gl_FragCoord.y * 2.0), vec2(((u_player.x - u_cam.x) - u_screen.x / 2.0) * u_cam_scale.x + u_screen.x / 2.0, ((u_player.y - u_cam.y) - u_screen.y / 2.0) * -u_cam_scale.y * 2 + u_screen.y / 2.0 * 2));
+   // float dist = distance(vec2(gl_FragCoord.x, gl_FragCoord.y * 2.0), vec2(((u_player.x - u_cam.x) - u_screen.x / 2.0) * u_cam_scale.x + u_screen.x / 2.0, ((u_player.y - u_cam.y) - u_screen.y / 2.0) * -u_cam_scale.y * 2 + u_screen.y / 2.0 * 2));
+    //float process_dist = (sqrt(dist) / 20.0);
+    FragColor = interp(FragColor, eveningColor, u_time, 0.0, 0.2);
 }

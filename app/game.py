@@ -43,14 +43,14 @@ class Map(Entity):
         grass1_surf = pg.image.load(f"app\\sources\\grass1.png").convert_alpha()
         sand_surf = pg.image.load(f"app\\sources\\sand.png").convert_alpha()
 
-        for x in range(3):
-            for y in range(3):
-                chunk_sprites = [random.choice([grass0_surf, grass1_surf]) for _ in range(64)]
+        for x in range(-3, 3):
+            for y in range(-3, 3):
+                chunk_sprites = [random.choice([grass0_surf, grass1_surf, sand_surf]) for _ in range(64)]
                 atlas_tex = build_chunk_atlas(chunk_sprites, 32, 15)
                 self.chunks[f"{x},{y}"] = ShaderObject.add_texture(atlas_tex)
 
     def tick(self):
-        self.time += 1
+        self.time += 10
         if self.time >= self.time_cap:
             self.time = 0
 
@@ -93,11 +93,11 @@ class Player(Entity):
             self.vel_z -= self.grv
 
         if Input.get_press(K_w):
-            self.vel_y -= self.speed * 0.5
+            self.vel_y -= self.speed * 15 / 32
         if Input.get_press(K_a):
             self.vel_x -= self.speed
         if Input.get_press(K_s):
-            self.vel_y += self.speed * 0.5
+            self.vel_y += self.speed * 15 / 32
         if Input.get_press(K_d):
             self.vel_x += self.speed
         if Input.get_press(K_SPACE) and self.z == 0:

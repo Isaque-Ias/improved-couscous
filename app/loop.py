@@ -86,6 +86,8 @@ class Loop:
             glUniform2f(map_u_cam_loc, main_cam_x, main_cam_y)
             glUniform2f(map_u_cam_scale_loc, main_cam_sc_x, main_cam_sc_y)
 
+            glUniform1i(map_u_time_loc, game_map.time)
+
             glUniform2f(map_u_screen_loc, screen_size[0], screen_size[1])
 
             game_map.tick()

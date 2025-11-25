@@ -38,6 +38,7 @@ class Map(Entity):
         super().__init__((0, 0), None, has_layer=False)
         self.time = 0
         self.time_cap = 24000
+        self.time_vel = 1
         
         grass0_surf = pg.image.load(f"app\\sources\\grass0.png").convert_alpha()
         grass1_surf = pg.image.load(f"app\\sources\\grass1.png").convert_alpha()
@@ -50,7 +51,7 @@ class Map(Entity):
                 self.chunks[f"{x},{y}"] = ShaderObject.add_texture(atlas_tex)
 
     def tick(self):
-        self.time += 10
+        self.time += self.time_vel
         if self.time >= self.time_cap:
             self.time = 0
 
@@ -112,7 +113,32 @@ class Player(Entity):
 
     def get_mvp(self):
         return Transformation.affine_transform((self.x, self.y - self.z - 3), (self.width, self.height), self.angle)
+
+class Commander:
+    _context = {}
+
+    @classmethod
+    def set_context(cls, context):
+        cls._context = context
+
+    @classmethod
+    def process(cls, command):
+        map_obj = cls._context["map"]
+        if command[0:2] == ">>":
+            tokens = command[2:].split()
     
+            if tokens[0] == "time":
+                if tokens[1] == "set":
+                    map_obj.time = int(tokens[2])
+                elif tokens[1] == "set_speed":
+                    map_obj.time_vel = int(tokens[2])
+        
+        return
+    
+    @staticmethod
+    def draw():
+        et.draw_cam(et.tex("pixel"), (0,0), (100, 100), color=(0, 0, 0), alpha=0.5)
+
 """
 tree algo:
 tree trunk is base. Generate tree like a tree.

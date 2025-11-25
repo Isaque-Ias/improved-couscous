@@ -3,8 +3,11 @@ from tools import Tools
 from shaders import ShaderObject
 from texture import Texture
 from camera import Camera
+from OpenGL.GL import *
 
 class EntityTools:
+    _color_loc = 0
+    
     @staticmethod
     def get_cam(cam):
         return Camera.get_camera(cam)
@@ -28,6 +31,20 @@ class EntityTools:
     @staticmethod
     def draw_image(image, pos, scale, angle):
         mvp = Transformation.affine_transform(pos, scale, angle)
+        ShaderObject.render(mvp, image)
+
+    @classmethod
+    def set_color_loc(cls, color):
+        cls._color_loc = color
+
+    @classmethod
+    def draw_cam(cls, image, pos, scale, color=(1, 1, 1), alpha=1):
+        glUniform4f(cls._color_loc, color[0], color[1], color[2], alpha)
+        main_cam = Camera.get_main_camera()
+        cam_pos = main_cam.get_pos()
+        cam_scale = main_cam.get_scale()
+        screen_size = EntityTools.get_screen_size()
+        mvp = Transformation.affine_transform((cam_pos[0] + pos[0] + screen_size[0] / 2, cam_pos[1] + screen_size[1] / 2 + pos[1]), (scale[0] / cam_scale[0], scale[1] / cam_scale[1]), 0)
         ShaderObject.render(mvp, image)
 
 class Entity:

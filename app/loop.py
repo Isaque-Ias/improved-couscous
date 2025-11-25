@@ -3,10 +3,10 @@ from pygame.locals import *
 from shaders import ShaderObject
 from OpenGL.GL import *
 from transformations import Transformation
-from entity import EntityManager
+from entity import EntityManager, EntityTools
 from texture import Texture
 from inputting import Input
-from game import Map, Player
+from game import Map, Player, Commander
 from camera import Camera
 from testing import Testing
 
@@ -30,12 +30,18 @@ class Loop:
         with open("app\\shaders\\map.fsh", "r") as file:
             MAP_FRAGMENT_SHADER = file.read()
 
+        with open("app\\shaders\\screen.vsh", "r") as file:
+            SCREEN_VERTEX_SHADER = file.read()
+        with open("app\\shaders\\screen.fsh", "r") as file:
+            SCREEN_FRAGMENT_SHADER = file.read()
+
         screen_size = (1280, 720)
         Transformation.set_size(screen_size)
         ShaderObject.set_size(screen_size)
         ShaderObject.init_pygame_opengl()
         default_shader = ShaderObject.create_shader_program(DEF_VERTEX_SHADER, DEF_FRAGMENT_SHADER)
         map_shader = ShaderObject.create_shader_program(MAP_VERTEX_SHADER, MAP_FRAGMENT_SHADER)
+        screen_shader = ShaderObject.create_shader_program(SCREEN_VERTEX_SHADER, SCREEN_FRAGMENT_SHADER)
         ShaderObject.setup_textured_quad()
 
         running = True
@@ -54,9 +60,14 @@ class Loop:
         map_u_cam_scale_loc = glGetUniformLocation(map_shader, "u_cam_scale")
         map_u_screen_loc = glGetUniformLocation(map_shader, "u_screen")
         map_u_time_loc = glGetUniformLocation(map_shader, "u_time")
+        map_u_time_cap_loc = glGetUniformLocation(map_shader, "u_time_cap")
         
         def_u_mvp_loc = glGetUniformLocation(default_shader, "u_mvp")
         def_u_tex_loc = glGetUniformLocation(default_shader, "u_texture")
+        def_u_tex_loc = glGetUniformLocation(default_shader, "u_texture")
+
+        screen_u_mvp_loc = glGetUniformLocation(screen_shader, "u_mvp")
+        screen_u_color_loc = glGetUniformLocation(screen_shader, "u_color")
 
         EntityManager.set_mvp(def_u_mvp_loc)
 
@@ -66,9 +77,15 @@ class Loop:
         player = Player((0, 0))
         game_map = Map()
 
-        Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE)
+        Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t)
 
         Testing.set_def_cap(1000)
+
+        Commander.set_context({
+            "map": game_map
+        })
+        EntityTools.set_color_loc(screen_u_color_loc)
+
 
         while running:
             Input.update()
@@ -87,6 +104,7 @@ class Loop:
             glUniform2f(map_u_cam_scale_loc, main_cam_sc_x, main_cam_sc_y)
 
             glUniform1i(map_u_time_loc, game_map.time)
+            glUniform1i(map_u_time_cap_loc, game_map.time_cap)
 
             glUniform2f(map_u_screen_loc, screen_size[0], screen_size[1])
 
@@ -95,6 +113,11 @@ class Loop:
 
             ShaderObject.set_shader(default_shader, def_u_mvp_loc)
             glUniform1i(def_u_tex_loc, 0)
+
+            if Input.get_press(K_t):
+                comando = input("Digite o comando:\n")
+
+                Commander.process(comando)
 
             entities = EntityManager.get_all_entities()
             for layer in EntityManager.get_content_layers():
@@ -109,6 +132,9 @@ class Loop:
                 if event.type == pg.QUIT:
                     running = False
                     print(Testing.get_relatory())
+
+            ShaderObject.set_shader(screen_shader, screen_u_mvp_loc)
+            Commander.draw()
 
             pg.display.flip()
             clock.tick(FPS)

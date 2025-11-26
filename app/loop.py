@@ -115,11 +115,6 @@ class Loop:
             ShaderObject.set_shader(default_shader, def_u_mvp_loc)
             glUniform1i(def_u_tex_loc, 0)
 
-            if Input.get_press(K_t) and not Commander.showing_chat:
-                listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
-                listener.start()
-                Commander.set_chatting(True)
-
             entities = EntityManager.get_all_entities()
             for layer in EntityManager.get_content_layers():
                 for entity in entities[layer]:

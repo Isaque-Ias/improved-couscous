@@ -94,6 +94,12 @@ class Player(Entity):
         else:
             self.vel_z -= self.grv
 
+        if Input.get_press(K_t) and not Commander.showing_chat:
+            listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
+            listener.start()
+            Commander.set_chatting(True)
+            Commander.set_using(self)
+
         if not Commander.showing_chat:
             if Input.get_press(K_w):
                 self.vel_y -= self.speed * 15 / 32
@@ -120,6 +126,7 @@ class Commander:
     _context = {}
     showing_chat = False
     chat_text = ""
+    _using = None
 
     IGNORED_COMBOS = {
         ("ctrl", "j"),
@@ -128,6 +135,10 @@ class Commander:
     }
 
     pressed_modifiers = set()
+
+    @classmethod
+    def set_using(cls, entity):
+        cls._using = entity
 
     @classmethod
     def get_modifiers(cls):
@@ -160,7 +171,11 @@ class Commander:
 
         if combo == ("shift", ">"):
             cls.chat_text += ">"
-            return 
+            return
+        
+        if combo == ("shift", "<"):
+            cls.chat_text += "<"
+            return
 
         if combo == ("shift", "_"):
             cls.chat_text += "_"
@@ -193,7 +208,6 @@ class Commander:
         #         # cls.chat_text += f"<{key.name}>"
 
 
-
     @classmethod
     def on_release(cls, key):
         if key in cls.pressed_modifiers:
@@ -203,7 +217,7 @@ class Commander:
             return False
         
         if key == keyboard.Key.enter:
-            cls.process(cls.chat_text)
+            cls.process(cls.chat_text, cls._using)
             cls.chat_text = ""
             cls.set_chatting(False)
             return False
@@ -213,7 +227,7 @@ class Commander:
         cls._context = context
 
     @classmethod
-    def process(cls, command):
+    def process(cls, command, caller):
         map_obj = cls._context["map"]
         if command[0:2] == ">>":
             tokens = command[2:].split()
@@ -223,8 +237,27 @@ class Commander:
                     map_obj.time = int(tokens[2])
                 elif tokens[1] == "set_speed":
                     map_obj.time_vel = int(tokens[2])
+
+            elif tokens[0] == "set_attribute":
+                selected = cls.selector_process(tokens[1], caller)
+                if tokens[2][0] == "_":
+                    return {"text": "fail", "type": "error"}
+                if tokens[3] == "int":
+                    for entity in selected:
+                        setattr(entity, tokens[2], int(tokens[4]))
+                elif tokens[3] == "float":
+                    for entity in selected:
+                        setattr(entity, tokens[2], float(tokens[4]))
+        else:
+            return {"text": command}
+
         
-        return
+        return None
+    
+    @classmethod
+    def selector_process(cls, selection, caller):
+        if selection == "self":
+            return [caller]
     
     @classmethod
     def set_chatting(cls, val):

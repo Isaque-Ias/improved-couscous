@@ -7,6 +7,7 @@ import pygame as pg
 import random
 from shaders import ShaderObject
 from transformations import Transformation
+from pynput import keyboard
 
 def pygame_surface_to_pil(surface):
     data = pg.image.tostring(surface, "RGBA", True)
@@ -93,16 +94,17 @@ class Player(Entity):
         else:
             self.vel_z -= self.grv
 
-        if Input.get_press(K_w):
-            self.vel_y -= self.speed * 15 / 32
-        if Input.get_press(K_a):
-            self.vel_x -= self.speed
-        if Input.get_press(K_s):
-            self.vel_y += self.speed * 15 / 32
-        if Input.get_press(K_d):
-            self.vel_x += self.speed
-        if Input.get_press(K_SPACE) and self.z == 0:
-            self.vel_z = 2
+        if not Commander.showing_chat:
+            if Input.get_press(K_w):
+                self.vel_y -= self.speed * 15 / 32
+            if Input.get_press(K_a):
+                self.vel_x -= self.speed
+            if Input.get_press(K_s):
+                self.vel_y += self.speed * 15 / 32
+            if Input.get_press(K_d):
+                self.vel_x += self.speed
+            if Input.get_press(K_SPACE) and self.z == 0:
+                self.vel_z = 2
 
         self.set_layer(self.y + 24)
 
@@ -116,6 +118,95 @@ class Player(Entity):
 
 class Commander:
     _context = {}
+    showing_chat = False
+    chat_text = ""
+
+    IGNORED_COMBOS = {
+        ("ctrl", "j"),
+        ("ctrl", "k"),
+        ("ctrl", "l"),
+    }
+
+    pressed_modifiers = set()
+
+    @classmethod
+    def get_modifiers(cls):
+        mods = []
+        if any(m in cls.pressed_modifiers for m in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)):
+            mods.append("ctrl")
+        if any(m in cls.pressed_modifiers for m in (keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r)):
+            mods.append("shift")
+        if any(m in cls.pressed_modifiers for m in (keyboard.Key.alt_l, keyboard.Key.alt_r)):
+            mods.append("alt")
+        return mods
+
+    @classmethod
+    def on_press(cls, key):
+        if isinstance(key, keyboard.Key):
+            if key == keyboard.Key.space:
+                cls.chat_text += " "
+                return
+
+            if key == keyboard.Key.backspace:
+                cls.chat_text = cls.chat_text[:-1]
+                return
+
+            cls.pressed_modifiers.add(key)
+            return
+
+        char = key.char.lower()
+        mods = cls.get_modifiers()
+        combo = tuple(mods + [char])
+
+        if combo == ("shift", ">"):
+            cls.chat_text += ">"
+            return 
+
+        if combo == ("shift", "_"):
+            cls.chat_text += "_"
+            return 
+
+        if combo in cls.IGNORED_COMBOS:
+            return
+
+        if not mods:
+            cls.chat_text += key.char
+
+        # if key.name == "space":
+        #     cls.chat_text += " "
+        # elif key.name == "backspace":
+        #     if len(cls.chat_text) > 0:
+        #         if Input.get_press(K_LCTRL):
+        #             idx = cls.chat_text.rfind(" ")
+        #             if idx == -1:
+        #                 cls.chat_text = ""
+        #             else:
+        #                 cls.chat_text = cls.chat_text[:idx+1]
+        #         else:
+        #             if cls.chat_text[-1] == ">":
+        #                 idx = cls.chat_text.rfind("<")
+        #                 cls.chat_text = cls.chat_text[:idx] 
+        #             else:
+        #                 cls.chat_text = cls.chat_text[:-1]
+        # # else:
+        #     # if key.name == "ctrl_l":
+        #         # cls.chat_text += f"<{key.name}>"
+
+
+
+    @classmethod
+    def on_release(cls, key):
+        if key in cls.pressed_modifiers:
+            cls.pressed_modifiers.remove(key)
+
+        if key == keyboard.Key.esc:
+            return False
+        
+        if key == keyboard.Key.enter:
+            cls.process(cls.chat_text)
+            cls.chat_text = ""
+            cls.set_chatting(False)
+            return False
 
     @classmethod
     def set_context(cls, context):
@@ -135,9 +226,19 @@ class Commander:
         
         return
     
-    @staticmethod
-    def draw():
-        et.draw_cam(et.tex("pixel"), (0,0), (100, 100), color=(0, 0, 0), alpha=0.5)
+    @classmethod
+    def set_chatting(cls, val):
+        cls.showing_chat = val
+
+    @classmethod
+    def draw(cls):
+        if cls.showing_chat:
+            screen_size = et.get_screen_size()
+            font = pg.font.Font("app\\sources\\fonts\\game_font.ttf", 32)
+            font_surf = font.render(cls.chat_text, True, (255, 255, 255))
+            texture = ShaderObject.add_texture(font_surf, True)
+            et.draw_cam(texture, (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 25), (texture["width"], texture["height"]), color=(255, 255, 255), alpha=1)
+            et.draw_cam(et.tex("pixel"), (0, screen_size[1] / 2 - 25), (screen_size[0], 50), color=(0, 0, 0), alpha=0.5)
 
 """
 tree algo:

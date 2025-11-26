@@ -9,6 +9,7 @@ from inputting import Input
 from game import Map, Player, Commander
 from camera import Camera
 from testing import Testing
+from pynput import keyboard
 
 class Loop:
     _title = "[Default Title]"
@@ -77,7 +78,7 @@ class Loop:
         player = Player((0, 0))
         game_map = Map()
 
-        Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t)
+        Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL)
 
         Testing.set_def_cap(1000)
 
@@ -114,10 +115,10 @@ class Loop:
             ShaderObject.set_shader(default_shader, def_u_mvp_loc)
             glUniform1i(def_u_tex_loc, 0)
 
-            if Input.get_press(K_t):
-                comando = input("Digite o comando:\n")
-
-                Commander.process(comando)
+            if Input.get_press(K_t) and not Commander.showing_chat:
+                listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
+                listener.start()
+                Commander.set_chatting(True)
 
             entities = EntityManager.get_all_entities()
             for layer in EntityManager.get_content_layers():

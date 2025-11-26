@@ -44,7 +44,7 @@ class EntityTools:
         cam_pos = main_cam.get_pos()
         cam_scale = main_cam.get_scale()
         screen_size = EntityTools.get_screen_size()
-        mvp = Transformation.affine_transform((cam_pos[0] + pos[0] + screen_size[0] / 2, cam_pos[1] + screen_size[1] / 2 + pos[1]), (scale[0] / cam_scale[0], scale[1] / cam_scale[1]), 0)
+        mvp = Transformation.affine_transform((cam_pos[0] + pos[0] / cam_scale[0] + screen_size[0] / 2, cam_pos[1] + pos[1] / cam_scale[1] + screen_size[1] / 2), (scale[0] / cam_scale[0], scale[1] / cam_scale[1]), 0)
         ShaderObject.render(mvp, image)
 
 class Entity:

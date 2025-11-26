@@ -71,9 +71,13 @@ class ShaderObject:
         return {"texture": tex_id, "width": width, "height": height}
     
     @staticmethod
-    def add_texture(texture):
-        image = texture.tobytes("raw", "RGBA", 0, -1)
-        width, height = texture.size
+    def add_texture(texture, is_py_surf=False):
+        if is_py_surf:
+            image = pg.image.tostring(texture, "RGBA", True)
+            width, height = texture.get_size()
+        else:
+            image = texture.tobytes("raw", "RGBA", 0, -1)
+            width, height = texture.size
 
         tex_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, tex_id)

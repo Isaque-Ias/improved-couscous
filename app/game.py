@@ -68,7 +68,7 @@ class Map(Entity):
             et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, 15 * 8 + 0.1), 0)
 
 class Player(Entity):
-    def __init__(self, pos):
+    def __init__(self, pos, name):
         super().__init__(pos, "player", (16, 16), layer=30)
         self.cam = et.get_cam("main")
         self.z = 0
@@ -77,6 +77,8 @@ class Player(Entity):
         self.vel_x = 0
         self.vel_y = 0
         self.vel_z = 0
+        self.jump_power = 2
+        self.nickname = name
 
         vh, vw = et.get_screen_size()
         self.cam_follow_pos = [(self.x - vh / 2), (self.y - vw / 2)]
@@ -110,7 +112,7 @@ class Player(Entity):
             if Input.get_press(K_d):
                 self.vel_x += self.speed
             if Input.get_press(K_SPACE) and self.z == 0:
-                self.vel_z = 2
+                self.vel_z = self.jump_power
 
         self.set_layer(self.y + 24)
 
@@ -127,6 +129,9 @@ class Commander:
     showing_chat = False
     chat_text = ""
     _using = None
+    feed = []
+    max_messages = 8
+    scroll_index = 0
 
     IGNORED_COMBOS = {
         ("ctrl", "j"),
@@ -139,6 +144,10 @@ class Commander:
     @classmethod
     def set_using(cls, entity):
         cls._using = entity
+        
+    @classmethod
+    def set_font(cls, font):
+        cls.chat_font = font
 
     @classmethod
     def get_modifiers(cls):
@@ -217,9 +226,20 @@ class Commander:
             return False
         
         if key == keyboard.Key.enter:
-            cls.process(cls.chat_text, cls._using)
+            if cls.chat_text == "":
+                cls.set_chatting(False)
+
+                return False
+            
+            output = cls.process(cls.chat_text, cls._using)
+            if not output == None:
+                cls.feed.insert(0, output)
+                if len(cls.feed) > cls.max_messages:
+                    cls.feed.pop(-1)
+
             cls.chat_text = ""
             cls.set_chatting(False)
+
             return False
 
     @classmethod
@@ -229,28 +249,30 @@ class Commander:
     @classmethod
     def process(cls, command, caller):
         map_obj = cls._context["map"]
-        if command[0:2] == ">>":
-            tokens = command[2:].split()
-    
-            if tokens[0] == "time":
-                if tokens[1] == "set":
-                    map_obj.time = int(tokens[2])
-                elif tokens[1] == "set_speed":
-                    map_obj.time_vel = int(tokens[2])
+        try:
+            if command[0:2] == ">>":
+                tokens = command[2:].split()
+        
+                if tokens[0] == "time":
+                    if tokens[1] == "set":
+                        map_obj.time = int(tokens[2])
+                    elif tokens[1] == "set_speed":
+                        map_obj.time_vel = int(tokens[2])
 
-            elif tokens[0] == "set_attribute":
-                selected = cls.selector_process(tokens[1], caller)
-                if tokens[2][0] == "_":
-                    return {"text": "fail", "type": "error"}
-                if tokens[3] == "int":
-                    for entity in selected:
-                        setattr(entity, tokens[2], int(tokens[4]))
-                elif tokens[3] == "float":
-                    for entity in selected:
-                        setattr(entity, tokens[2], float(tokens[4]))
-        else:
-            return {"text": command}
-
+                elif tokens[0] == "set_attribute":
+                    selected = cls.selector_process(tokens[1], caller)
+                    if tokens[2][0] == "_":
+                        return {"text": "fail", "type": "error"}
+                    if tokens[3] == "int":
+                        for entity in selected:
+                            setattr(entity, tokens[2], int(tokens[4]))
+                    elif tokens[3] == "float":
+                        for entity in selected:
+                            setattr(entity, tokens[2], float(tokens[4]))
+            else:
+                return {"text": command, "type": "global", "user": caller.nickname}
+        except:
+            return {"text": "fail", "type": "error"}
         
         return None
     
@@ -265,13 +287,31 @@ class Commander:
 
     @classmethod
     def draw(cls):
+        screen_size = et.get_screen_size()
         if cls.showing_chat:
-            screen_size = et.get_screen_size()
-            font = pg.font.Font("app\\sources\\fonts\\game_font.ttf", 32)
-            font_surf = font.render(cls.chat_text, True, (255, 255, 255))
+            font_surf = cls.chat_font.render(cls.chat_text, True, (255, 255, 255))
             texture = ShaderObject.add_texture(font_surf, True)
-            et.draw_cam(texture, (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 25), (texture["width"], texture["height"]), color=(255, 255, 255), alpha=1)
-            et.draw_cam(et.tex("pixel"), (0, screen_size[1] / 2 - 25), (screen_size[0], 50), color=(0, 0, 0), alpha=0.5)
+            et.draw_cam(et.tex("pixel"), (0, screen_size[1] / 2 - 16), (screen_size[0], 32), color=(0, 0, 0), alpha=0.5)
+            et.draw_cam(texture, (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 16), (texture["width"], texture["height"]), color=(255, 255, 255), alpha=1)
+
+        for idx, message in enumerate(cls.feed):
+            if message.get("time") == None:
+                message["time"] = 400
+
+            message["time"] = max(0, message["time"] - 1)
+            show_opacity = 1 if cls.showing_chat else min(message["time"], 100) / 100
+            feed_text = message["text"]
+            if message["type"] == "global":
+                feed_text = f'<{message["user"]}> {message["text"]}'
+            
+            text_color = (1, 1, 1)
+            if message["type"] == "error":
+                text_color = (1, 0.5, 0.5)
+
+            font_surf = cls.chat_font.render(feed_text, True, (255, 255, 255))
+            texture = ShaderObject.add_texture(font_surf, True)
+            et.draw_cam(et.tex("pixel"), (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 48 - 32 * idx), (texture["width"] + 20, 32), color=(0, 0, 0), alpha=0.5 * show_opacity)
+            et.draw_cam(texture, (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 48 - 32 * idx), (texture["width"], texture["height"]), color=text_color, alpha=1 * show_opacity)
 
 """
 tree algo:

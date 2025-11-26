@@ -9,7 +9,6 @@ from inputting import Input
 from game import Map, Player, Commander
 from camera import Camera
 from testing import Testing
-from pynput import keyboard
 
 class Loop:
     _title = "[Default Title]"
@@ -36,7 +35,7 @@ class Loop:
         with open("app\\shaders\\screen.fsh", "r") as file:
             SCREEN_FRAGMENT_SHADER = file.read()
 
-        screen_size = (1280, 720)
+        screen_size = (1200, 600)
         Transformation.set_size(screen_size)
         ShaderObject.set_size(screen_size)
         ShaderObject.init_pygame_opengl()
@@ -75,16 +74,18 @@ class Loop:
         cam = Camera.get_main_camera()
         cam.set_scale((5, 5))
 
-        player = Player((0, 0))
+        player = Player((0, 0), "russo")
         game_map = Map()
 
-        Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL)
+        Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN)
 
         Testing.set_def_cap(1000)
 
         Commander.set_context({
             "map": game_map
         })
+        Commander.set_font(pg.font.Font("app\\sources\\fonts\\game_font.ttf", 18))
+
         EntityTools.set_color_loc(screen_u_color_loc)
 
 

@@ -8,6 +8,7 @@ import random
 from shaders import ShaderObject
 from transformations import Transformation
 from pynput import keyboard
+from server import Host, Client
 
 def pygame_surface_to_pil(surface):
     data = pg.image.tostring(surface, "RGBA", True)
@@ -132,6 +133,7 @@ class Commander:
     feed = []
     max_messages = 8
     scroll_index = 0
+    caps = False
 
     IGNORED_COMBOS = {
         ("ctrl", "j"),
@@ -140,6 +142,10 @@ class Commander:
     }
 
     pressed_modifiers = set()
+
+    @classmethod
+    def set_caps(cls, cap):
+        cls.caps = cap
 
     @classmethod
     def set_using(cls, entity):
@@ -178,23 +184,15 @@ class Commander:
         mods = cls.get_modifiers()
         combo = tuple(mods + [char])
 
-        if combo == ("shift", ">"):
-            cls.chat_text += ">"
+        if combo[0] == "shift":
+            cls.chat_text += combo[1].upper() if not cls.caps else combo[1]
             return
         
-        if combo == ("shift", "<"):
-            cls.chat_text += "<"
-            return
-
-        if combo == ("shift", "_"):
-            cls.chat_text += "_"
-            return 
-
         if combo in cls.IGNORED_COMBOS:
             return
 
         if not mods:
-            cls.chat_text += key.char
+            cls.chat_text += key.char.upper() if cls.caps else key.char
 
         # if key.name == "space":
         #     cls.chat_text += " "
@@ -246,6 +244,16 @@ class Commander:
     def set_context(cls, context):
         cls._context = context
 
+    @staticmethod
+    def convert_to_time(time, time_cap):
+        hours = (int(time)) // (1/24 * time_cap)
+        if hours >= 13: hours -= 12
+        hours = str(int(hours))
+        minutes = str(int(int(time) % (1/24 * time_cap) * 60 // (1/24 * time_cap)))
+        if int(minutes) < 10: minutes = "0" + minutes
+
+        return hours, minutes
+
     @classmethod
     def process(cls, command, caller):
         map_obj = cls._context["map"]
@@ -255,9 +263,21 @@ class Commander:
         
                 if tokens[0] == "time":
                     if tokens[1] == "set":
+                        if int(tokens[2]) < 0 or int(tokens[2]) > map_obj.time_cap:
+                            return {"text": f"time must range from 0 to {map_obj.time_cap}", "type": "error"}    
                         map_obj.time = int(tokens[2])
+                        
+                        hours, minutes = cls.convert_to_time(tokens[2], map_obj.time_cap)
+
+                        return {"text": f"Time set to {hours}:{minutes} {'p' if int(tokens[2]) >= 13/24 * map_obj.time_cap else 'a'}.m.", "type": "success"}
+
                     elif tokens[1] == "set_speed":
                         map_obj.time_vel = int(tokens[2])
+                        return {"text": f"Time passing speed altered to {tokens[2]} times the original rate.", "type": "success"}
+
+                    elif tokens[1] == "get":
+                        hours, minutes = cls.convert_to_time(map_obj.time, map_obj.time_cap)
+                        return {"text": f"{hours}:{minutes} {'p' if int(map_obj.time) >= 13/24 * map_obj.time_cap else 'a'}.m.", "type": "success"}
 
                 elif tokens[0] == "set_attribute":
                     selected = cls.selector_process(tokens[1], caller)
@@ -269,18 +289,35 @@ class Commander:
                     elif tokens[3] == "float":
                         for entity in selected:
                             setattr(entity, tokens[2], float(tokens[4]))
+
+                elif tokens[0] == "host":
+                    Host.start_server(int(tokens[1]), cls)
+
+                elif tokens[0] == "connect":
+                    Client.join_server(int(tokens[1]), cls)
             else:
                 return {"text": command, "type": "global", "user": caller.nickname}
-        except:
-            return {"text": "fail", "type": "error"}
+        except Exception as e:
+            return {"text": f"fail: {e}", "type": "error"}
         
         return None
-    
+
     @classmethod
     def selector_process(cls, selection, caller):
         if selection == "self":
             return [caller]
     
+    @classmethod
+    def get_server_data(cls):
+        map_obj = cls._context["map"]
+        return {"game_time": map_obj.time, "game_time_speed": map_obj.time_vel}
+
+    @classmethod
+    def update_server(cls, data):
+        map_obj = cls._context["map"]
+        map_obj.time = data["game_time"]
+        map_obj.time_vel = data["game_time_speed"]
+
     @classmethod
     def set_chatting(cls, val):
         cls.showing_chat = val
@@ -307,6 +344,8 @@ class Commander:
             text_color = (1, 1, 1)
             if message["type"] == "error":
                 text_color = (1, 0.5, 0.5)
+            if message["type"] == "success":
+                text_color = (0.75, 0.75, 0.75)
 
             font_surf = cls.chat_font.render(feed_text, True, (255, 255, 255))
             texture = ShaderObject.add_texture(font_surf, True)

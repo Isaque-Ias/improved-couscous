@@ -8,7 +8,7 @@ from texture import Texture
 from inputting import Input
 from game import Map, Player, Commander
 from camera import Camera
-from testing import Testing
+# from testing import Testing
 
 class Loop:
     _title = "[Default Title]"
@@ -74,12 +74,13 @@ class Loop:
         cam = Camera.get_main_camera()
         cam.set_scale((5, 5))
 
-        player = Player((0, 0), "russo")
+        player_name = input("Nome do player: ")
+        player = Player((0, 0), player_name)
         game_map = Map()
 
         Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN)
 
-        Testing.set_def_cap(1000)
+        # Testing.set_def_cap(1000)
 
         Commander.set_context({
             "map": game_map
@@ -126,9 +127,14 @@ class Loop:
                     entity.draw()
 
             for event in pg.event.get():
+                mods = pg.key.get_mods()
+                if mods & pg.KMOD_CAPS:
+                    Commander.set_caps(True)    
+                else:
+                    Commander.set_caps(False)
                 if event.type == pg.QUIT:
                     running = False
-                    print(Testing.get_relatory())
+                    # print(Testing.get_relatory())
 
             ShaderObject.set_shader(screen_shader, screen_u_mvp_loc)
             Commander.draw()

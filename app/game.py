@@ -8,7 +8,8 @@ import random
 from shaders import ShaderObject
 from transformations import Transformation
 from pynput import keyboard
-from server import Host, Client
+from client import Client
+from host import Host
 
 def pygame_surface_to_pil(surface):
     data = pg.image.tostring(surface, "RGBA", True)
@@ -69,7 +70,7 @@ class Map(Entity):
             et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, 15 * 8 + 0.1), 0)
 
 class Player(Entity):
-    def __init__(self, pos, name):
+    def __init__(self, pos, name, controllable):
         super().__init__(pos, "player", (16, 16), layer=30)
         self.cam = et.get_cam("main")
         self.z = 0
@@ -80,9 +81,19 @@ class Player(Entity):
         self.vel_z = 0
         self.jump_power = 2
         self.nickname = name
+        self.controllable = controllable
+        self.interp_time = 0
+        self.server_update_step = 60 / 20
 
         vh, vw = et.get_screen_size()
         self.cam_follow_pos = [(self.x - vh / 2), (self.y - vw / 2)]
+
+    def interp_pos(self, pos):
+        self.goal_x = pos[0]
+        self.goal_y = pos[1]
+        self.start_x = self.x
+        self.start_y = self.y
+        self.interp_time = self.server_update_step
 
     def tick(self):
         self.x += self.vel_x
@@ -97,30 +108,38 @@ class Player(Entity):
         else:
             self.vel_z -= self.grv
 
-        if Input.get_press(K_t) and not Commander.showing_chat:
-            listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
-            listener.start()
-            Commander.set_chatting(True)
-            Commander.set_using(self)
-
-        if not Commander.showing_chat:
-            if Input.get_press(K_w):
-                self.vel_y -= self.speed * 15 / 32
-            if Input.get_press(K_a):
-                self.vel_x -= self.speed
-            if Input.get_press(K_s):
-                self.vel_y += self.speed * 15 / 32
-            if Input.get_press(K_d):
-                self.vel_x += self.speed
-            if Input.get_press(K_SPACE) and self.z == 0:
-                self.vel_z = self.jump_power
-
         self.set_layer(self.y + 24)
 
-        vh, vw = et.get_screen_size()
-        self.cam_follow_pos[0] -= ((self.cam_follow_pos[0]) - (self.x - vh / 2)) / 5
-        self.cam_follow_pos[1] -= ((self.cam_follow_pos[1]) - (self.y - vw / 2)) / 5
-        self.cam.set_pos(self.cam_follow_pos)
+        if self.interp_time > 0:
+            t = self.interp_time / self.server_update_step
+            self.x = self.goal_x * t + self.start_x * (1 - t)
+            self.y = self.goal_y * t + self.start_y * (1 - t)
+            self.interp_time -= 1
+
+        if self.controllable:
+            if Input.get_press(K_t) and not Commander.showing_chat:
+                listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
+                listener.start()
+                Commander.set_chatting(True)
+                Commander.set_using(self)
+
+            if not Commander.showing_chat:
+                if Input.get_press(K_w):
+                    self.vel_y -= self.speed * 15 / 32
+                if Input.get_press(K_a):
+                    self.vel_x -= self.speed
+                if Input.get_press(K_s):
+                    self.vel_y += self.speed * 15 / 32
+                if Input.get_press(K_d):
+                    self.vel_x += self.speed
+                if Input.get_press(K_SPACE) and self.z == 0:
+                    self.vel_z = self.jump_power
+
+            vh, vw = et.get_screen_size()
+            self.cam_follow_pos[0] -= ((self.cam_follow_pos[0]) - (self.x - vh / 2)) / 5
+            self.cam_follow_pos[1] -= ((self.cam_follow_pos[1]) - (self.y - vw / 2)) / 5
+            self.cam.set_pos(self.cam_follow_pos)
+
 
     def get_mvp(self):
         return Transformation.affine_transform((self.x, self.y - self.z - 3), (self.width, self.height), self.angle)
@@ -134,6 +153,7 @@ class Commander:
     max_messages = 8
     scroll_index = 0
     caps = False
+    players = {}
 
     IGNORED_COMBOS = {
         ("ctrl", "j"),
@@ -291,10 +311,14 @@ class Commander:
                             setattr(entity, tokens[2], float(tokens[4]))
 
                 elif tokens[0] == "host":
+                    cls._context["player"] = caller
                     Host.start_server(int(tokens[1]), cls)
+                    return {"text": f"Hosting at: {tokens[1]}", "type": "success"}
 
                 elif tokens[0] == "connect":
+                    cls._context["player"] = caller
                     Client.join_server(int(tokens[1]), cls)
+                    return {"text": f"Connected successfully at: {tokens[1]}", "type": "success"}
             else:
                 return {"text": command, "type": "global", "user": caller.nickname}
         except Exception as e:
@@ -310,13 +334,29 @@ class Commander:
     @classmethod
     def get_server_data(cls):
         map_obj = cls._context["map"]
-        return {"game_time": map_obj.time, "game_time_speed": map_obj.time_vel}
+        return {"game_time": map_obj.time,
+                "game_time_speed": map_obj.time_vel, 
+                "players": [{"pos": [cls.players[player].x, cls.players[player].y], "name": cls.players[player].nickname} for player in cls.players]}
 
     @classmethod
     def update_server(cls, data):
         map_obj = cls._context["map"]
         map_obj.time = data["game_time"]
         map_obj.time_vel = data["game_time_speed"]
+        for player in data["players"]:
+            if cls.players.get(player["name"]) == None:
+                cls.players[player["name"]] = Player(player["pos"], player["name"], False)
+            else:
+                if cls.players[player["name"]].controllable == False:
+                    cls.players[player["name"]].interp_pos((player["pos"][0], player["pos"][1]))
+
+    @classmethod
+    def set_player(cls, data):
+        if cls.players.get(data["name"]) == None:
+            cls.players[data["name"]] = Player(data["pos"], data["name"], False)
+            return
+        if cls.players[data["name"]].controllable == False:
+            cls.players[data["name"]].interp_pos((data["pos"][0], data["pos"][1]))
 
     @classmethod
     def set_chatting(cls, val):

@@ -75,7 +75,7 @@ class Loop:
         cam.set_scale((5, 5))
 
         player_name = input("Nome do player: ")
-        player = Player((0, 0), player_name)
+        player = Player((0, 0), player_name, True)
         game_map = Map()
 
         Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN)
@@ -85,6 +85,7 @@ class Loop:
         Commander.set_context({
             "map": game_map
         })
+        Commander.players[player.nickname] = player
         Commander.set_font(pg.font.Font("app\\sources\\fonts\\game_font.ttf", 18))
 
         EntityTools.set_color_loc(screen_u_color_loc)

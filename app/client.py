@@ -1,0 +1,57 @@
+import socket
+import threading
+import json
+import time
+
+class Client:
+    port = 1025
+    receiver = None
+
+    @classmethod
+    def join_server(cls, port, receiver):
+        cls.port = int(port)
+        cls.receiver = receiver
+
+        threading.Thread(target=cls.network_loop, daemon=True).start()
+
+    @classmethod
+    def network_loop(cls):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("127.0.0.1", cls.port))
+
+        # Send player data continuously
+        threading.Thread(target=cls.send_loop, args=(s,), daemon=True).start()
+
+        # Listen for server packets
+        while True:
+            try:
+                raw = s.recv(4096)
+                if not raw:
+                    break
+
+                server_data = json.loads(raw.decode())
+                cls.receiver.update_server(server_data)
+
+            except:
+                break
+
+        s.close()
+        print("Disconnected from server")
+
+    @classmethod
+    def send_loop(cls, sock):
+        """Send player movement/position/etc. 20 times/sec"""
+        while True:
+            try:
+                player = cls.receiver._context["player"]
+                payload = {
+                    "pos": [player.x, player.y],
+                    "name": player.nickname
+                }
+
+                sock.sendall(json.dumps(payload).encode())
+
+            except:
+                return
+
+            time.sleep(0.05)  # 20 updates/sec

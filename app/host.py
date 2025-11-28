@@ -16,7 +16,7 @@ class Host:
         cls.host_logic = host_logic
 
         cls.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        cls.server_socket.bind(("127.0.0.1", cls.port))
+        cls.server_socket.bind(("0.0.0.0", cls.port))
         cls.server_socket.listen(20)
 
         print(f"Server running on 127.0.0.1:{cls.port}")

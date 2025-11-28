@@ -9,7 +9,7 @@ class Client:
 
     @classmethod
     def join_server(cls, port, receiver):
-        cls.port = int(port)
+        cls.port = port.split(":")
         cls.receiver = receiver
 
         threading.Thread(target=cls.network_loop, daemon=True).start()
@@ -17,7 +17,8 @@ class Client:
     @classmethod
     def network_loop(cls):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(("127.0.0.1", cls.port))
+        ip, port = cls.port
+        s.connect((ip, int(port)))
 
         # Send player data continuously
         threading.Thread(target=cls.send_loop, args=(s,), daemon=True).start()

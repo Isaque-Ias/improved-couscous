@@ -1,5 +1,5 @@
 from looping import GameLoop
-from entity import Entity, EntityManager
+from entity import Entity
 from entity import EntityTools as et
 from OpenGL.GL import *
 from pygame.locals import *
@@ -355,12 +355,12 @@ class Commander(Entity):
 
                 elif tokens[0] == "host":
                     cls._context["player"] = caller
-                    Host.start_server(int(tokens[1]), cls)
+                    Host.start_server(tokens[1], cls)
                     return {"text": f"Hosting at: {tokens[1]}", "type": "success"}
 
                 elif tokens[0] == "connect":
                     cls._context["player"] = caller
-                    Client.join_server(int(tokens[1]), cls)
+                    Client.join_server(tokens[1], cls)
                     return {"text": f"Connected successfully at: {tokens[1]}", "type": "success"}
             else:
                 return {"text": command, "type": "global", "user": caller.nickname}

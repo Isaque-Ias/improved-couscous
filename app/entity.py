@@ -1,20 +1,24 @@
 from transformations import Transformation
 from tools import Tools
-from shaders import ShaderObject
+from shaders import ShaderHandler
 from texture import Texture
 from camera import Camera
 from OpenGL.GL import *
 
 class EntityTools:
-    _color_loc = 0
+    _default_shaders = ShaderHandler.add_shader_file("def")
     
     @staticmethod
     def get_cam(cam):
         return Camera.get_camera(cam)
 
+    @classmethod
+    def get_default_shaders(cls):
+        return ShaderHandler.get_shader_program("def")
+
     @staticmethod
     def get_screen_size():
-        return ShaderObject.get_size()
+        return ShaderHandler.get_size()
 
     @staticmethod
     def tex(tex):
@@ -26,26 +30,29 @@ class EntityTools:
 
     @staticmethod
     def default_draw(entity):
-        ShaderObject.render(entity.get_mvp(), Texture.get_texture(entity.image))
+        ShaderHandler.render(entity.get_mvp(), Texture.get_texture(entity.image))
 
-    @staticmethod
-    def draw_image(image, pos, scale, angle):
+    @classmethod
+    def draw_image(cls, image, pos, scale, angle=0, color=(1, 1, 1), alpha=1, program=None):
+        if program == None:
+            program = cls.get_default_shaders()
+
         mvp = Transformation.affine_transform(pos, scale, angle)
-        ShaderObject.render(mvp, image)
+        ShaderHandler.render(mvp, image)
 
     @classmethod
-    def set_color_loc(cls, color):
-        cls._color_loc = color
+    def draw_cam(cls, image, pos, scale, color=(1, 1, 1), alpha=1, program=None):
+        if program == None:
+            program = cls.get_default_shaders()
 
-    @classmethod
-    def draw_cam(cls, image, pos, scale, color=(1, 1, 1), alpha=1):
-        glUniform4f(cls._color_loc, color[0], color[1], color[2], alpha)
+        u_color_loc = glGetUniformLocation(program, "u_color")
+        glUniform4f(u_color_loc, color[0], color[1], color[2], alpha)
         main_cam = Camera.get_main_camera()
         cam_pos = main_cam.get_pos()
         cam_scale = main_cam.get_scale()
         screen_size = EntityTools.get_screen_size()
         mvp = Transformation.affine_transform((cam_pos[0] + pos[0] / cam_scale[0] + screen_size[0] / 2, cam_pos[1] + pos[1] / cam_scale[1] + screen_size[1] / 2), (scale[0] / cam_scale[0], scale[1] / cam_scale[1]), 0)
-        ShaderObject.render(mvp, image)
+        ShaderHandler.render(mvp, image)
 
 class Entity:
     def __init__(self, pos, image=None, scale=(0, 0), angle=0, layer=0, has_layer=True):
@@ -68,8 +75,14 @@ class Entity:
     def tick(self):
         pass
 
+    def pre_draw(self):
+        pass
+
     def draw(self):
         EntityTools.default_draw(self)
+    
+    def draw_gui(self):
+        pass
 
     def get_mvp(self):
         return EntityTools.default_mvp(self)
@@ -90,10 +103,6 @@ class EntityManager:
     _entities = {}
     _content = []
     _id = 0
-
-    @classmethod
-    def set_mvp(cls, mvp):
-        cls._mvp = mvp
 
     @classmethod
     def remove_entity_layer(cls, entity):
@@ -121,6 +130,10 @@ class EntityManager:
         return cls._entities
 
     @classmethod
+    def get_background_layers(cls):
+        return cls._content_background
+
+    @classmethod
     def get_content_layers(cls):
         return cls._content
 
@@ -130,7 +143,6 @@ class EntityManager:
             entity = [entity]
 
         for element in entity:
-            element.mvp = cls._mvp
             element.set_id(cls._id)
             
             cls.add_entity_layer(element)

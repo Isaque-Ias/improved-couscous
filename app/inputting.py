@@ -2,6 +2,15 @@ import pygame as pg
 
 class Input:
     _keys = {}
+    _input = False
+
+    @classmethod
+    def set_caps(cls, value):
+        cls._caps = value
+
+    @classmethod
+    def get_caps(cls):
+        return cls._caps
 
     @classmethod
     def set_keys(cls, *keys):

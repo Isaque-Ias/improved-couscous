@@ -3,9 +3,30 @@ from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
 import numpy as np
+from pathlib import Path
 
-class ShaderObject:
+class ShaderHandler:
     screen_size = (800, 600)
+    _shader_files = {}
+    _shader_programs = {}
+    _current_program = None
+    _uniform_mappings = {
+        "1i": glUniform1i,
+        "2i": glUniform2i,
+        "3i": glUniform3i,
+        "4i": glUniform4i,
+        "1f": glUniform1f,
+        "2f": glUniform2f,
+        "3f": glUniform3f,
+        "4f": glUniform4f,
+    }
+
+    _CWD = Path.cwd()
+    _SHADERS = _CWD / "app" / "shaders"
+
+    @classmethod
+    def get_uniform_func(cls, data_type):
+        return cls._uniform_mappings[data_type]
 
     @classmethod
     def set_size(cls, size):
@@ -14,6 +35,33 @@ class ShaderObject:
     @classmethod
     def get_size(cls):
         return cls.screen_size
+    
+    @classmethod
+    def generate_shader_programs(cls):
+        files = cls.get_shader_files()
+        for key in files:
+            vertex, fragment = files[key]["vertex"], files[key]["fragment"]
+            cls._shader_programs[key] = cls.create_shader_program(vertex, fragment)
+
+    @classmethod
+    def get_shader_files(cls):
+        return cls._shader_files
+
+    @classmethod
+    def get_shader_program(cls, name):
+        return cls._shader_programs[name]
+
+    @classmethod
+    def set_default_file_path(cls, path):
+        cls._SHADERS = path
+
+    @classmethod
+    def add_shader_file(cls, name):
+        with open(cls._SHADERS / (name + ".vsh"), "r") as file:
+            VERTEX_SHADER = file.read()
+        with open(cls._SHADERS / (name + ".fsh"), "r") as file:
+            FRAGMENT_SHADER = file.read()
+        cls._shader_files[name] = {"vertex": VERTEX_SHADER, "fragment": FRAGMENT_SHADER}
 
     @staticmethod
     def create_shader_program(vertex, fragment):
@@ -25,7 +73,6 @@ class ShaderObject:
 
     @classmethod
     def init_pygame_opengl(cls):
-        pg.init()
         display = cls.screen_size
 
         pg.display.gl_set_attribute(pg.GL_MULTISAMPLEBUFFERS, 0)
@@ -48,9 +95,24 @@ class ShaderObject:
         cls.u_mvp_loc = mvp
 
     @classmethod
-    def set_shader(cls, shader, mvp):
+    def set_shader(cls, shader, custom_mvp=None):
         glUseProgram(shader)
+        cls._current_program = shader
+        if custom_mvp == None:
+            mvp = glGetUniformLocation(shader, "u_mvp")
         cls.set_mvp(mvp)
+
+    @classmethod
+    def get_current_shader(cls):
+        return cls._current_program
+
+    @classmethod
+    def set_uniform_value(cls, uniform, data_type, *value):
+        u = glGetUniformLocation(cls.get_current_shader(), uniform)
+        func = cls.get_uniform_func(data_type)
+        value = list(value)
+        params = [u] + value
+        func(*params)
 
     @staticmethod
     def load_texture(path):

@@ -44,6 +44,6 @@ class Testing:
             return "No timings were made."
         message = ""
         for key in cls._times.keys():
-            message = message + f"{format(cls.get_average(key), ".20f")} seconds on \"{key}\" in {len(cls._times[key]["data"])} tries.\n"
+            message = message + f"{format(cls.get_average(key), '.20f')} seconds on \"{key}\" in {len(cls._times[key]["data"])} tries.\n"
 
         return message

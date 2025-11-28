@@ -96,10 +96,11 @@ class ShaderHandler:
 
     @classmethod
     def set_shader(cls, shader, custom_mvp=None):
-        glUseProgram(shader)
-        cls._current_program = shader
+        shader_program = cls.get_shader_program(shader)
+        glUseProgram(shader_program)
+        cls._current_program = shader_program
         if custom_mvp == None:
-            mvp = glGetUniformLocation(shader, "u_mvp")
+            mvp = glGetUniformLocation(shader_program, "u_mvp")
         cls.set_mvp(mvp)
 
     @classmethod

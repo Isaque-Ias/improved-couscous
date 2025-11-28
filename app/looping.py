@@ -10,14 +10,24 @@ from transformations import Transformation
 class GameLoop:
     _title = "[Default Title]"
     _screen_size = (800, 600)
+    _color = (0, 0, 0, 0)
 
     @classmethod
     def set_title(cls, t):
         cls._title = t
 
     @classmethod
+    def get_title(cls):
+        return cls._title
+
+    @classmethod
     def set_background_color(cls, color):
         glClearColor(color[0], color[1], color[2], color[3])
+        cls._color = color
+
+    @classmethod
+    def get_background_color(cls):
+        return cls._color
 
     @classmethod
     def set_screen_size(cls, size):
@@ -42,16 +52,12 @@ class GameLoop:
         clock = pg.time.Clock()
         running = True
 
-        default_shader = ShaderHandler.get_shader_program("def")
-        def_u_mvp_loc = glGetUniformLocation(default_shader, "u_texture")
-        def_u_tex_loc = glGetUniformLocation(default_shader, "u_texture")
-
         while running:
             Input.update()
 
             glClear(GL_COLOR_BUFFER_BIT)
-            ShaderHandler.set_shader(default_shader)
-            glUniform1i(def_u_tex_loc, 0)
+            ShaderHandler.set_shader("def")
+            ShaderHandler.set_uniform_value("u_texture", "1i", 0)
 
             entities = EntityManager.get_all_entities()
             content_layers = EntityManager.get_content_layers()
@@ -79,7 +85,12 @@ class GameLoop:
                     Input.set_caps(False)
                 if event.type == pg.QUIT:
                     running = False
-                    print(Testing.get_relatory())
+
+                if event.type == pg.WINDOWFOCUSLOST:
+                    Input.set_focus(False)
+
+                if event.type == pg.WINDOWFOCUSGAINED:
+                    Input.set_focus(True)
 
             pg.display.flip()
             clock.tick(FPS)

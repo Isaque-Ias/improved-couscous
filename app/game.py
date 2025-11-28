@@ -53,7 +53,7 @@ class Map(Entity):
         main_cam_pos = main_cam.get_pos()
         main_cam_scale = main_cam.get_scale()
         
-        ShaderHandler.set_shader(self.shaders)
+        ShaderHandler.set_shader("map")
 
         ShaderHandler.set_uniform_value("u_time", "1i", self.time)
         ShaderHandler.set_uniform_value("u_cam", "2f", main_cam_pos[0], main_cam_pos[1])
@@ -146,10 +146,7 @@ class Player(Entity):
 
         if self.controllable:
             if Input.get_press(K_t) and not Commander.showing_chat:
-                listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
-                listener.start()
-                Commander.set_chatting(True)
-                Commander.set_using(self)
+                Commander.start_chat(self)
 
             if not Commander.showing_chat:
                 if Input.get_press(K_w):
@@ -170,7 +167,7 @@ class Player(Entity):
 
 
     def get_mvp(self):
-        return Transformation.affine_transform((self.x, self.y - self.z - 3), (self.width, self.height), self.angle)
+        return Transformation.affine_transform((self.x, self.y - self.z - 3), (self.width, self.height), self.angle, static=False)
 
 class Commander(Entity):
     _context = {}
@@ -178,13 +175,17 @@ class Commander(Entity):
     chat_text = ""
     _using = None
     feed = []
-    max_messages = 8
+    typed_feed = []
+    max_messages = 128
     scroll_index = 0
     caps = False
     players = {}
     chat_font = pg.font.Font(FONTS / "game_font.ttf", 18)
     player_name = True
     game_started = False
+
+    history_scroll = -1
+    current_chat = ""
 
     IGNORED_COMBOS = {
         ("ctrl", "j"),
@@ -196,6 +197,14 @@ class Commander(Entity):
 
     def __init__(self):
         super().__init__((0, 0), None)
+
+    @classmethod
+    def start_chat(cls, entity):
+        listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
+        listener.start()
+        Commander.set_chatting(True)
+        Commander.history_scroll = -1
+        Commander.set_using(entity)
 
     @classmethod
     def tick(cls):
@@ -232,11 +241,39 @@ class Commander(Entity):
 
     @classmethod
     def on_press(cls, key):
+        if not Input.get_focus():
+            return
+        
         mods = cls.get_modifiers()
         is_ctrl = "ctrl" in mods
         is_shift = "shift" in mods
         is_alt = "alt" in mods
         if isinstance(key, keyboard.Key):
+            if key == keyboard.Key.up:
+                if cls.history_scroll == -1:
+                    cls.current_chat = cls.chat_text
+                
+                if cls.history_scroll > len(cls.typed_feed) or len(cls.typed_feed) == 0:
+                    return
+                
+                cls.history_scroll += 1
+                cls.chat_text = cls.typed_feed[cls.history_scroll]
+    
+                return
+            
+            if key == keyboard.Key.down:
+                if cls.history_scroll == 0:
+                    cls.chat_text = cls.current_chat
+                    return
+
+                if cls.history_scroll == -1:
+                    return
+                
+                cls.history_scroll -= 1
+                cls.chat_text = cls.typed_feed[cls.history_scroll]
+    
+                return
+
             if key == keyboard.Key.space:
                 cls.chat_text += " "
                 return
@@ -273,6 +310,9 @@ class Commander(Entity):
 
     @classmethod
     def on_release(cls, key):
+        if not Input.get_focus():
+            return
+        
         if key in cls.pressed_modifiers:
             cls.pressed_modifiers.remove(key)
 
@@ -298,6 +338,7 @@ class Commander(Entity):
                 if len(cls.feed) > cls.max_messages:
                     cls.feed.pop(-1)
 
+            cls.typed_feed.insert(0, cls.chat_text)
             cls.chat_text = ""
             cls.set_chatting(False)
 
@@ -319,28 +360,27 @@ class Commander(Entity):
 
     @classmethod
     def process(cls, command, caller):
-        map_obj = cls._context["map"]
         try:
             if command[0:2] == ">>":
                 tokens = command[2:].split()
         
                 if tokens[0] == "time":
                     if tokens[1] == "set":
-                        if int(tokens[2]) < 0 or int(tokens[2]) > map_obj.time_cap:
-                            return {"text": f"time must range from 0 to {map_obj.time_cap}", "type": "error"}    
-                        map_obj.time = int(tokens[2])
+                        if int(tokens[2]) < 0 or int(tokens[2]) > game_map.time_cap:
+                            return {"text": f"time must range from 0 to {game_map.time_cap}", "type": "error"}    
+                        game_map.time = int(tokens[2])
                         
-                        hours, minutes = cls.convert_to_time(tokens[2], map_obj.time_cap)
+                        hours, minutes = cls.convert_to_time(tokens[2], game_map.time_cap)
 
-                        return {"text": f"Time set to {hours}:{minutes} {'p' if int(tokens[2]) >= 13/24 * map_obj.time_cap else 'a'}.m.", "type": "success"}
+                        return {"text": f"Time set to {hours}:{minutes} {'p' if int(tokens[2]) >= 13/24 * game_map.time_cap else 'a'}.m.", "type": "success"}
 
                     elif tokens[1] == "set_speed":
-                        map_obj.time_vel = int(tokens[2])
+                        game_map.time_vel = int(tokens[2])
                         return {"text": f"Time passing speed altered to {tokens[2]} times the original rate.", "type": "success"}
 
                     elif tokens[1] == "get":
-                        hours, minutes = cls.convert_to_time(map_obj.time, map_obj.time_cap)
-                        return {"text": f"{hours}:{minutes} {'p' if int(map_obj.time) >= 13/24 * map_obj.time_cap else 'a'}.m.", "type": "success"}
+                        hours, minutes = cls.convert_to_time(game_map.time, game_map.time_cap)
+                        return {"text": f"{hours}:{minutes} {'p' if int(game_map.time) >= 13/24 * game_map.time_cap else 'a'}.m.", "type": "success"}
 
                 elif tokens[0] == "set_attribute":
                     selected = cls.selector_process(tokens[1], caller)
@@ -412,19 +452,18 @@ class Commander(Entity):
         cls.showing_chat = val
 
     @classmethod
-    def draw_gui(cls):
-        screen_shader = ShaderHandler.get_shader_program("screen")
-        screen_u_mvp_loc = glGetUniformLocation(screen_shader, "u_mvp")        
-        ShaderHandler.set_shader(screen_shader)
+    def draw_gui(cls):    
+        ShaderHandler.set_shader("screen")
 
         screen_size = et.get_screen_size()
         if cls.showing_chat:
             font_surf = cls.chat_font.render(cls.chat_text, True, (255, 255, 255))
             texture = ShaderHandler.add_texture(font_surf, True)
-            et.draw_cam(et.tex("pixel"), (0, screen_size[1] / 2 - 16), (screen_size[0], 32), color=(0, 0, 0), alpha=0.5)
-            et.draw_cam(texture, (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 16), (texture["width"], texture["height"]), color=(255, 255, 255), alpha=1)
+            et.draw_image(et.tex("pixel"), (screen_size[0] / 2, screen_size[1] - 16), (screen_size[0], 32), color=(0, 0, 0), alpha=0.5, static=True)
+            et.draw_image(texture, (texture["width"] / 2 + 10, screen_size[1] - 16), (texture["width"], texture["height"]), color=(255, 255, 255), alpha=1, static=True)
 
         for idx, message in enumerate(cls.feed):
+            if idx >= 8: break
             if message.get("time") == None:
                 message["time"] = 400
 
@@ -442,15 +481,15 @@ class Commander(Entity):
 
             font_surf = cls.chat_font.render(feed_text, True, (255, 255, 255))
             texture = ShaderHandler.add_texture(font_surf, True)
-            et.draw_cam(et.tex("pixel"), (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 48 - 32 * idx), (texture["width"] + 20, 32), color=(0, 0, 0), alpha=0.5 * show_opacity)
-            et.draw_cam(texture, (-screen_size[0] / 2 + texture["width"] / 2 + 10, screen_size[1] / 2 - 48 - 32 * idx), (texture["width"], texture["height"]), color=text_color, alpha=1 * show_opacity)
+            et.draw_image(et.tex("pixel"), (texture["width"] / 2 + 10, screen_size[1] - 48 - 32 * idx), (texture["width"] + 20, 32), color=(0, 0, 0), alpha=0.5 * show_opacity, static=True)
+            et.draw_image(texture, (texture["width"] / 2 + 10, screen_size[1] - 48 - 32 * idx), (texture["width"], texture["height"]), color=text_color, alpha=1 * show_opacity, static=True)
 
 def game_start(player_name):
+    GameLoop.set_background_color((98 / 255, 168 / 255, 242 / 255, 0.0))
+
+    global player, game_map
     player = Player((0, 0), player_name, True)
     game_map = Map()
-    Commander.set_context({
-        "map": game_map
-    })
     Commander.players[player.nickname] = player
 
 def pre_load_game():
@@ -477,7 +516,7 @@ def pre_load_game():
 
     Testing.set_def_cap(1000)
 
-    GameLoop.set_background_color((98 / 255, 168 / 255, 242 / 255, 0.0))
+    GameLoop.set_background_color((0.0, 0.0, 0.0, 0.0))
 
 if __name__ == "__main__":
     pre_load_game()

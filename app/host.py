@@ -19,7 +19,7 @@ class Host:
         cls.server_socket.bind(("0.0.0.0", cls.port))
         cls.server_socket.listen(20)
 
-        print(f"Server running on 127.0.0.1:{cls.port}")
+        print(f"Server running on 0.0.0.0:{cls.port}")
 
         # Accept client connections
         threading.Thread(target=cls.accept_loop, daemon=True).start()

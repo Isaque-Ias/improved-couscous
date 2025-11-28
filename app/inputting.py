@@ -3,6 +3,7 @@ import pygame as pg
 class Input:
     _keys = {}
     _input = False
+    _focus = False
 
     @classmethod
     def set_caps(cls, value):
@@ -11,6 +12,14 @@ class Input:
     @classmethod
     def get_caps(cls):
         return cls._caps
+
+    @classmethod
+    def set_focus(cls, value):
+        cls._focus = value
+
+    @classmethod
+    def get_focus(cls):
+        return cls._focus
 
     @classmethod
     def set_keys(cls, *keys):

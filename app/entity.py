@@ -33,25 +33,12 @@ class EntityTools:
         ShaderHandler.render(entity.get_mvp(), Texture.get_texture(entity.image))
 
     @classmethod
-    def draw_image(cls, image, pos, scale, angle=0, color=(1, 1, 1), alpha=1, program=None):
+    def draw_image(cls, image, pos, scale, angle=0, color=(1, 1, 1), alpha=1, static=False, program=None):
         if program == None:
             program = cls.get_default_shaders()
+        ShaderHandler.set_uniform_value("u_color", "4f", color[0], color[1], color[2], alpha)
 
-        mvp = Transformation.affine_transform(pos, scale, angle)
-        ShaderHandler.render(mvp, image)
-
-    @classmethod
-    def draw_cam(cls, image, pos, scale, color=(1, 1, 1), alpha=1, program=None):
-        if program == None:
-            program = cls.get_default_shaders()
-
-        u_color_loc = glGetUniformLocation(program, "u_color")
-        glUniform4f(u_color_loc, color[0], color[1], color[2], alpha)
-        main_cam = Camera.get_main_camera()
-        cam_pos = main_cam.get_pos()
-        cam_scale = main_cam.get_scale()
-        screen_size = EntityTools.get_screen_size()
-        mvp = Transformation.affine_transform((cam_pos[0] + pos[0] / cam_scale[0] + screen_size[0] / 2, cam_pos[1] + pos[1] / cam_scale[1] + screen_size[1] / 2), (scale[0] / cam_scale[0], scale[1] / cam_scale[1]), 0)
+        mvp = Transformation.affine_transform(pos, scale, angle, static)
         ShaderHandler.render(mvp, image)
 
 class Entity:

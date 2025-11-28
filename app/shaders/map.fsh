@@ -19,9 +19,10 @@ vec4 mix_rgb(vec4 color_a, vec4 color_b, float t) {
 
 float f_pi = 3.1415;
 
-const int total_times = 6;
+const int total_times = 7;
 
 const vec4 times[total_times] = vec4[total_times](
+    vec4(0.0, 0.0, 0.0, 0.95),
     vec4(0.0, 0.0, 0.0, 0.9),
     vec4(45.0 / 255.0, 90.0 / 255.0, 150.0 / 255.0, 0.2),
     vec4(1.0, 1.0, 1.0, 0.0),
@@ -32,6 +33,11 @@ const vec4 times[total_times] = vec4[total_times](
 
 vec4 interp(vec4 color_a, vec4 color_b, float t, float min_v, float max_v) {
     return mix_rgb(color_a, color_b, max(min_v, min(max_v, t)));
+}
+
+float smoothstep(float t) {
+    return t;
+    //3.0 * t * t - 2.0 * t * t * t;
 }
 
 vec4 time_lerp(int time) {
@@ -45,7 +51,7 @@ vec4 time_lerp(int time) {
 
     float seg_t = (t * total_times / u_time_cap) - float(idx);
 
-    
+    seg_t = smoothstep(seg_t);
 
     return mix(a, b, seg_t);
 }

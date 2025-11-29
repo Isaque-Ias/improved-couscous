@@ -416,16 +416,14 @@ class Commander(Entity):
     
     @classmethod
     def get_server_data(cls):
-        map_obj = cls._context["map"]
-        return {"game_time": map_obj.time,
-                "game_time_speed": map_obj.time_vel, 
+        return {"game_time": game_map.time,
+                "game_time_speed": game_map.time_vel, 
                 "players": [{"pos": [cls.players[player].x, cls.players[player].y], "name": cls.players[player].nickname} for player in cls.players]}
 
     @classmethod
     def update_server(cls, data):
-        map_obj = cls._context["map"]
-        map_obj.time = data["game_time"]
-        map_obj.time_vel = data["game_time_speed"]
+        game_map.time = data["game_time"]
+        game_map.time_vel = data["game_time_speed"]
         for player in data["players"]:
             if cls.players.get(player["name"]) == None:
                 cls.players[player["name"]] = Player(player["pos"], player["name"], False)

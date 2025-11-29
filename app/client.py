@@ -35,7 +35,8 @@ class Client:
                 break
 
         s.close()
-        print("Disconnected from server")
+        print("Disconnected from server, reconnecting...")
+        cls.join_server(cls.port[0] + ":" + cls.port[1], cls.receiver)
 
     @classmethod
     def send_loop(cls, sock):

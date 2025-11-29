@@ -5,7 +5,6 @@ class Cam:
         self.set_scale(scale)
         self.set_angle(angle)
 
-
     def set_pos(self, pos):
         self._pos = pos
 

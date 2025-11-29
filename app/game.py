@@ -8,7 +8,7 @@ from PIL import Image
 import pygame as pg
 import random
 from shaders import ShaderHandler
-from transformations import Transformation
+from linear_alg import Transformation
 from pynput import keyboard
 from client import Client
 from host import Host
@@ -34,7 +34,7 @@ class Map(Entity):
 
         for x in range(-3, 3):
             for y in range(-3, 3):
-                chunk_sprites = [random.choice([et.tex("grass0"), et.tex("grass1"), et.tex("sand0")]) for _ in range(64)]
+                chunk_sprites = [random.choice([et.tex("grass0")["texture"], et.tex("grass1")["texture"], et.tex("sand0")["texture"]]) for _ in range(64)]
                 atlas_tex = self.build_chunk_atlas(chunk_sprites, 32, 15)
                 self.chunks[f"{x},{y}"] = ShaderHandler.add_texture(atlas_tex)
 

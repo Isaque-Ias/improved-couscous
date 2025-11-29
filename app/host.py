@@ -21,10 +21,8 @@ class Host:
 
         print(f"Server running on 0.0.0.0:{cls.port}")
 
-        # Accept client connections
         threading.Thread(target=cls.accept_loop, daemon=True).start()
 
-        # Send updates to clients
         threading.Thread(target=cls.broadcast_loop, daemon=True).start()
 
     @classmethod
@@ -36,12 +34,10 @@ class Host:
             with cls.clients_lock:
                 cls.clients.append(conn)
 
-            # Each client handled in a new thread
             threading.Thread(target=cls.client_handler, args=(conn,), daemon=True).start()
 
     @classmethod
     def client_handler(cls, conn):
-        """Receives player data continuously"""
         while True:
             try:
                 raw = conn.recv(4096)
@@ -54,7 +50,6 @@ class Host:
             except:
                 break
 
-        # remove client
         with cls.clients_lock:
             if conn in cls.clients:
                 cls.clients.remove(conn)
@@ -64,7 +59,6 @@ class Host:
 
     @classmethod
     def broadcast_loop(cls):
-        """Sends server state to all clients ~20 times/sec"""
         while True:
             try:
                 packet = json.dumps(cls.host_logic.get_server_data()).encode()
@@ -78,7 +72,6 @@ class Host:
                         except:
                             dead.append(c)
 
-                    # cleanup
                     for dc in dead:
                         cls.clients.remove(dc)
                         dc.close()
@@ -86,4 +79,4 @@ class Host:
             except Exception as e:
                 print("Broadcast error:", e)
 
-            time.sleep(0.05)  # 20 updates/sec
+            time.sleep(0.05)

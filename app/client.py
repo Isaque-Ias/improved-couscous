@@ -20,10 +20,8 @@ class Client:
         ip, port = cls.port
         s.connect((ip, int(port)))
 
-        # Send player data continuously
         threading.Thread(target=cls.send_loop, args=(s,), daemon=True).start()
 
-        # Listen for server packets
         while True:
             try:
                 raw = s.recv(4096)
@@ -41,7 +39,6 @@ class Client:
 
     @classmethod
     def send_loop(cls, sock):
-        """Send player movement/position/etc. 20 times/sec"""
         while True:
             try:
                 player = cls.receiver._context["player"]
@@ -55,4 +52,4 @@ class Client:
             except:
                 return
 
-            time.sleep(0.05)  # 20 updates/sec
+            time.sleep(0.05)

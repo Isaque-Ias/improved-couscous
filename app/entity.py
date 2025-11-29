@@ -1,4 +1,4 @@
-from transformations import Transformation
+from linear_alg import Transformation
 from tools import Tools
 from shaders import ShaderHandler
 from texture import Texture

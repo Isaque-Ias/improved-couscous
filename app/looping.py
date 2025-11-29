@@ -4,8 +4,7 @@ from shaders import ShaderHandler
 from OpenGL.GL import *
 from entity import EntityManager
 from inputting import Input
-from testing import Testing
-from transformations import Transformation
+from linear_alg import Transformation
 
 class GameLoop:
     _title = "[Default Title]"

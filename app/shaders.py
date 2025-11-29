@@ -8,7 +8,6 @@ from pathlib import Path
 class ShaderHandler:
     screen_size = (800, 600)
     _shader_files = {}
-    _shader_programs = {}
     _current_program = None
     _uniform_mappings = {
         "1i": glUniform1i,
@@ -41,7 +40,7 @@ class ShaderHandler:
         files = cls.get_shader_files()
         for key in files:
             vertex, fragment = files[key]["vertex"], files[key]["fragment"]
-            cls._shader_programs[key] = cls.create_shader_program(vertex, fragment)
+            cls._shader_files[key]["program"] = cls.create_shader_program(vertex, fragment)
 
     @classmethod
     def get_shader_files(cls):
@@ -49,7 +48,7 @@ class ShaderHandler:
 
     @classmethod
     def get_shader_program(cls, name):
-        return cls._shader_programs[name]
+        return cls._shader_files[name]["program"]
 
     @classmethod
     def set_default_file_path(cls, path):
@@ -115,24 +114,6 @@ class ShaderHandler:
         params = [u] + value
         func(*params)
 
-    @staticmethod
-    def load_texture(path):
-        surface = pg.image.load(path)
-        image = pg.image.tostring(surface, "RGBA", True)
-        width, height = surface.get_size()
-
-        tex_id = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, tex_id)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                    GL_RGBA, GL_UNSIGNED_BYTE, image)
-
-        glBindTexture(GL_TEXTURE_2D, 0)
-        return {"texture": tex_id, "width": width, "height": height}
-    
     @staticmethod
     def add_texture(texture, is_py_surf=False):
         if is_py_surf:

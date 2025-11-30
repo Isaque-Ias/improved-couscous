@@ -14,7 +14,6 @@ from pathlib import Path
 from texture import Texture
 from camera import Camera
 from testing import Testing
-from tools import Tools
 import random
 import math
 from math import cos
@@ -45,7 +44,6 @@ class Map(Entity):
         ]
         self.time_color = (1,1,1,1)
         self.TOTAL_TIMES = len(self.times)
-
 
         for x in range(-3, 3):
             for y in range(-3, 3):
@@ -239,7 +237,7 @@ class Player(Entity):
 
         for light in lights:
             d = ((self.x - light.x) ** 2 + (self.y - light.y) ** 2) ** 0.5
-            exp_v = Tools.clamp(0, 1, d / light.strength)
+            exp_v = np.clip(d / light.strength, 0, 1)
             I = 2.7 ** (-5 * exp_v) - 2.7 ** -5
             I /= 1 - 2.7**-5
             light_color = (max(color[0], light.r), max(color[1], light.g), max(color[1], light.b), 1)
@@ -292,15 +290,15 @@ class Slime(Entity):
             self.time_to_jump = max(-40, self.time_to_jump - 5)
 
         if self.time_to_jump < 100:
-            sprite_index = int(Tools.clamp(0, 10, 10 - self.time_to_jump / 20))
+            sprite_index = int(np.clip(10 - self.time_to_jump / 20, 0, 10))
             self.image = f"slime{sprite_index}"
         else:
             t = (self.fall_time - self.time_to_jump) / 50
-            sprite_index = int(Tools.clamp(5, 10, 5 + 3 * (1 - cos(t)) * 0.9 ** t))
+            sprite_index = int(np.clip(5 + 3 * (1 - cos(t)) * 0.9 ** t, 5, 10))
             self.image = f"slime{sprite_index}"
 
         if self.time_to_jump <= -40:
-            sprite_index = int(Tools.clamp(0, 10, 6 - (-self.time_to_jump - 40)))
+            sprite_index = int(np.clip(6 - (-self.time_to_jump - 40), 0, 10))
             self.image = f"slime{sprite_index}"
             self.time_to_jump -= 1
             if self.time_to_jump < -45:
@@ -310,7 +308,7 @@ class Slime(Entity):
                     self.target = (self.x + random.random() * 60 - 30, self.y + random.random() * 60 - 30)
 
                 target_dist = ((self.target[0] - self.x) ** 2 + (self.target[1] - self.y) ** 2) ** 0.5
-                self.vel_z = Tools.clamp(2.5, 3.6, target_dist / 10)
+                self.vel_z = np.clip(target_dist / 10, 2.5, 3.6)
                 self.target_move[0] = min((self.target[0] - self.x) * self.speed, 1.4)
                 self.target_move[1] = min((self.target[1] - self.y) * self.speed, 1.4)
 
@@ -319,7 +317,7 @@ class Slime(Entity):
                 self.time_to_jump = 1200 + random.random() * 500
 
         if self.z > 0:
-            sprite_index = int(Tools.clamp(0, 5, 5 - abs(self.vel_z * 2)))
+            sprite_index = int(np.clip(5 - abs(self.vel_z * 2), 0, 5))
             self.image = f"slime{sprite_index}"
             self.vel_x = self.target_move[0]
             self.vel_y = self.target_move[1]
@@ -350,7 +348,7 @@ class Slime(Entity):
 
         for light in lights:
             d = ((self.x - light.x) ** 2 + (self.y - light.y) ** 2) ** 0.5
-            exp_v = Tools.clamp(0, 1, d / light.strength)
+            exp_v = np.clip(d / light.strength, 0, 1)
             I = 2.7 ** (-5 * exp_v) - 2.7 ** -5
             I /= 1 - 2.7**-5
             light_color = (max(color[0], light.r), max(color[1], light.g), max(color[1], light.b), 1)
@@ -464,7 +462,7 @@ class Commander(Entity):
         try:
             if command[0:2] == ">>":
                 tokens = command[2:].split()
-        
+
                 if tokens[0] == "time":
                     if tokens[1] == "set":
                         if int(tokens[2]) < 0 or int(tokens[2]) > game_map.time_cap:
@@ -482,6 +480,9 @@ class Commander(Entity):
                     elif tokens[1] == "get":
                         hours, minutes = cls.convert_to_time(game_map.time, game_map.time_cap)
                         return {"text": f"{hours}:{minutes} {'p' if int(game_map.time) >= 13/24 * game_map.time_cap else 'a'}.m.", "type": "success"}
+                    
+                    else:
+                        raise TypeError(f"Unknown time command \"{tokens[1]}\"")
 
                 elif tokens[0] == "set_attribute":
                     selected = cls.selector_process(tokens[1], caller)
@@ -509,6 +510,8 @@ class Commander(Entity):
                         lights.append(Light((caller.x, caller.y, caller.z), 20))
                     elif tokens[1] == "slime":
                         slimes.append(Slime((caller.x, caller.y), (random.random(), random.random(), random.random()), random.random()*0.3 + 0.5))
+                else:
+                    raise TypeError(f"Unknown command \"{tokens[0]}\"")
             else:
                 return {"text": command, "type": "global", "user": caller.nickname}
         except Exception as e:
@@ -639,9 +642,21 @@ class MenuManager(Entity):
         self.ask_player_name()
 
     @staticmethod
-    def enter_logic(message):
-        if len(message) > 0:
+    def valid_username(message):
+        allowed = {"_", "!", "."}
+        for ch in message:
+            if ch.isalnum():
+                continue
+            if ch in allowed:
+                continue
             return False
+        return True
+
+    @classmethod
+    def enter_logic(cls, message):
+        if len(message) > 0:
+            if cls.valid_username(message):
+                return False
 
     @classmethod
     def ask_player_name(cls):

@@ -5,15 +5,66 @@ from OpenGL.GL import *
 from entity import EntityManager
 from inputting import Input
 from linear_alg import Transformation
+import os
 
 class GameLoop:
+    pg.init()
     _title = "[Default Title]"
-    _screen_size = (800, 600)
+    _screen_size = (10, 10)
+    _non_full_screen_size = (10, 10)
     _color = (0, 0, 0, 0)
+    fps = 60
+    _info = pg.display.Info()
+    view_width = _info.current_w
+    view_height = _info.current_h
+    _fullscreen = False
+    _resizable = False
+    _fullscreenable = False
+    _flags = None
+
+    @classmethod
+    def set_can_fullscreen(cls, value):
+        cls._fullscreenable = value
+
+    @classmethod
+    def get_can_fullscreen(cls):
+        return cls._fullscreenable
+
+    @classmethod
+    def get_fullscreen(cls):
+        return cls._fullscreen
+
+    @classmethod
+    def set_fullscreen(cls, value):
+        cls._fullscreen = value
+
+    @classmethod
+    def set_resizable(cls, value):
+        cls._resizable = value
+
+        cls._flags = DOUBLEBUF | OPENGL
+        if cls._resizable:
+            cls._flags = DOUBLEBUF | OPENGL | pg.RESIZABLE
+
+    @classmethod
+    def get_resizable(cls):
+        return cls._resizable
+    
+    @classmethod
+    def get_flags(cls):
+        return cls._flags
 
     @classmethod
     def set_title(cls, t):
         cls._title = t
+
+    @classmethod
+    def set_fps(cls, fps):
+        cls._fps = fps
+
+    @classmethod
+    def get_fps(cls):
+        return cls._fps
 
     @classmethod
     def get_title(cls):
@@ -30,28 +81,39 @@ class GameLoop:
 
     @classmethod
     def set_screen_size(cls, size):
-        cls._screen_size = size
+        if not cls.get_fullscreen():
+            cls._screen_size = size
 
     @classmethod
     def get_screen_size(cls):
         return cls._screen_size
 
     @classmethod
+    def update_screen_size(cls, size):
+        cls.set_screen_size(size)
+        Transformation.set_size(size)
+        ShaderHandler.set_size(size)
+
+    @classmethod
     def setup(cls):
         Transformation.set_size(cls.get_screen_size())
         ShaderHandler.set_size(cls.get_screen_size())
-        pg.init()
-        ShaderHandler.init_pygame_opengl()
+        
+        ShaderHandler.init_pygame_opengl(cls.get_flags())
         ShaderHandler.generate_shader_programs()
         ShaderHandler.setup_textured_quad()
 
     @classmethod
-    def start(cls):
-        FPS = 60
-        clock = pg.time.Clock()
-        running = True
+    def end(cls):
+        cls._running = False
 
-        while running:
+    @classmethod
+    def start(cls):
+        cls._fps = 60
+        clock = pg.time.Clock()
+
+        cls._running = True
+        while cls._running:
             Input.update()
 
             glClear(GL_COLOR_BUFFER_BIT)
@@ -60,6 +122,7 @@ class GameLoop:
 
             entities = EntityManager.get_all_entities()
             content_layers = EntityManager.get_content_layers()
+            # if Input.get_pressed(K_y):
             for layer in content_layers:
                 for entity in entities[layer]:
                     entity.tick()
@@ -75,6 +138,10 @@ class GameLoop:
             for layer in content_layers:
                 for entity in entities[layer]:
                     entity.draw_gui()
+
+            layer_changes = EntityManager.get_layer_changes()
+            for key in layer_changes:
+                EntityManager.set_layer_change(*layer_changes[key])
             
             for event in pg.event.get():
                 mods = pg.key.get_mods()
@@ -83,7 +150,7 @@ class GameLoop:
                 else:
                     Input.set_caps(False)
                 if event.type == pg.QUIT:
-                    running = False
+                    cls._running = False
 
                 if event.type == pg.WINDOWFOCUSLOST:
                     Input.set_focus(False)
@@ -91,8 +158,29 @@ class GameLoop:
                 if event.type == pg.WINDOWFOCUSGAINED:
                     Input.set_focus(True)
 
+                if cls.get_resizable():
+                    if event.type == pg.VIDEORESIZE:
+                        GameLoop.update_screen_size((event.w, event.h))
+
+                if cls.get_can_fullscreen():
+                    if event.type == pg.KEYDOWN and event.key == pg.K_F11:
+                        cls.set_fullscreen(not cls.get_fullscreen())
+
+                        if not cls.get_fullscreen():
+                            max_value = (cls.view_width, cls.view_height)
+                            screen_value = cls.get_screen_size()
+                            screen_value = (min(screen_value[0], max_value[0] - 30), min(screen_value[1], max_value[1] - 80))
+                            os.environ['SDL_VIDEO_CENTERED'] = "1"
+                            pg.display.set_mode(max_value, cls.get_flags())
+                            pg.display.set_mode(screen_value, cls.get_flags())
+                            cls.update_screen_size(screen_value)
+                        else:
+                            screen_value = (cls.view_width, cls.view_height)
+                            pg.display.set_mode(screen_value, pg.FULLSCREEN | cls.get_flags())
+                            cls.update_screen_size(screen_value)
+
             pg.display.flip()
-            clock.tick(FPS)
+            clock.tick(cls.get_fps())
 
 if __name__ == "__main__":
     GameLoop.start()

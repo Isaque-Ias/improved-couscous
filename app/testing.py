@@ -1,4 +1,7 @@
 import time
+from OpenGL.GL import *
+import numpy as np
+from PIL import Image
 
 class Testing:
     _times = {}
@@ -47,3 +50,27 @@ class Testing:
             message = message + f"{format(cls.get_average(key), '.20f')} seconds on \"{key}\" in {len(cls._times[key]["data"])} tries.\n"
 
         return message
+    
+    def save_texture(texture_id, filename="atlas_dump.png"):
+        glBindTexture(GL_TEXTURE_2D, texture_id)
+
+        # Get texture size directly from OpenGL
+        width  = glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH)
+        height = glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT)
+
+        if width == 0 or height == 0:
+            print("ERROR: Texture", texture_id, "has size 0x0 (probably not uploaded yet)")
+            return
+
+        # Read pixel data
+        data = glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE)
+
+        # Convert to numpy array
+        arr = np.frombuffer(data, dtype=np.uint8).reshape((height, width, 4))
+
+        # OpenGL images are upside down
+        arr = np.flip(arr, axis=0)
+
+        img = Image.fromarray(arr, "RGBA")
+        img.save(filename)
+        print(f"Saved texture {texture_id} ({width}x{height}) -> {filename}")

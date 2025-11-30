@@ -8,6 +8,7 @@ from pathlib import Path
 class ShaderHandler:
     screen_size = (800, 600)
     _shader_files = {}
+    _occupated_textures = {}
     _current_program = None
     _uniform_mappings = {
         "1i": glUniform1i,
@@ -18,6 +19,10 @@ class ShaderHandler:
         "2f": glUniform2f,
         "3f": glUniform3f,
         "4f": glUniform4f,
+        "1fv": glUniform1fv,
+        "2fv": glUniform2fv,
+        "3fv": glUniform3fv,
+        "4fv": glUniform4fv,
     }
 
     _CWD = Path.cwd()
@@ -71,14 +76,15 @@ class ShaderHandler:
         return shader
 
     @classmethod
-    def init_pygame_opengl(cls):
+    def init_pygame_opengl(cls, flags):
         display = cls.screen_size
 
         pg.display.gl_set_attribute(pg.GL_MULTISAMPLEBUFFERS, 0)
         pg.display.gl_set_attribute(pg.GL_MULTISAMPLESAMPLES, 0)
 
         pg.display.gl_set_attribute(pg.GL_ALPHA_SIZE, 8)
-        pg.display.set_mode(display, DOUBLEBUF | OPENGL)
+
+        pg.display.set_mode(display, flags)
         pg.display.set_caption("test")
 
         glViewport(0, 0, display[0], display[1])
@@ -115,7 +121,37 @@ class ShaderHandler:
         func(*params)
 
     @staticmethod
-    def add_texture(texture, is_py_surf=False):
+    def replace_texture(tex_id, texture, is_py_surf=False):
+        glBindTexture(GL_TEXTURE_2D, tex_id)
+        if is_py_surf:
+            image = pg.image.tostring(texture, "RGBA", True)
+            width, height = texture.get_size()
+        else:
+            image = texture.tobytes("raw", "RGBA", 0, -1)
+            width, height = texture.size
+
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            width, height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            image
+        )
+
+        value = {"texture": tex_id, "width": width, "height": height}
+        return value
+
+    @classmethod
+    def add_texture(cls, texture, is_py_surf=False, occupation=None):
+        if not occupation == None:
+            if not cls._occupated_textures.get(occupation) == None:
+                tex_value = cls._occupated_textures[occupation]
+                cls._occupated_textures[occupation] = cls.replace_texture(tex_value["texture"], texture, is_py_surf)
+                return cls._occupated_textures[occupation]
+            
         if is_py_surf:
             image = pg.image.tostring(texture, "RGBA", True)
             width, height = texture.get_size()
@@ -133,7 +169,14 @@ class ShaderHandler:
                     GL_RGBA, GL_UNSIGNED_BYTE, image)
 
         glBindTexture(GL_TEXTURE_2D, 0)
-        return {"texture": tex_id, "width": width, "height": height}
+
+        value = {"texture": tex_id, "width": width, "height": height}
+
+        if not occupation == None:
+            if cls._occupated_textures.get(occupation) == None:
+                cls._occupated_textures[occupation] = value
+
+        return value
     
     @staticmethod
     def setup_textured_quad():

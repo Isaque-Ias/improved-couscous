@@ -1,21 +1,24 @@
 from looping import GameLoop
-from entity import Entity
+from entity import Entity, EntityManager
 from entity import EntityTools as et
 from OpenGL.GL import *
 from pygame.locals import *
-from inputting import Input
+from inputting import Input, InputListener
 from PIL import Image
 import pygame as pg
 import random
 from shaders import ShaderHandler
-from linear_alg import Transformation
-from pynput import keyboard
 from client import Client
 from host import Host
 from pathlib import Path
 from texture import Texture
 from camera import Camera
 from testing import Testing
+from tools import Tools
+import random
+import math
+from math import cos
+import numpy as np
 
 CWD = Path.cwd()
 SOURCES = CWD / "app" / "sources"
@@ -28,9 +31,21 @@ class Map(Entity):
     chunks = {}
     def __init__(self):
         super().__init__((0, 0), None)
-        self.time = 0
+        self.time = 6000
         self.time_cap = 24000
         self.time_vel = 1
+        self.times = [
+            (0.0, 0.0, 0.0, 0.95),
+            (0.0, 0.0, 0.0, 0.9),
+            (45/255, 90/255, 150/255, 0.2),
+            (1.0, 1.0, 1.0, 0.0),
+            (1.0, 1.0, 1.0, 0.0),
+            (250/255, 165/255, 45/255, 0.2),
+            (0.0, 0.0, 0.0, 0.9)
+        ]
+        self.time_color = (1,1,1,1)
+        self.TOTAL_TIMES = len(self.times)
+
 
         for x in range(-3, 3):
             for y in range(-3, 3):
@@ -44,23 +59,55 @@ class Map(Entity):
         self.time += self.time_vel
         if self.time >= self.time_cap:
             self.time = 0
+        self.time_color = self.time_lerp(self.time, self.time_cap)
 
     def draw(self):
         pass
 
+    @staticmethod
+    def mix(a, b, t):
+        return a * (1.0 - t) + b * t
+
+    @staticmethod
+    def smoothstep_python(t):
+        return t
+
+    def time_lerp(self, time_value, time_cap):
+        t = float(time_value)
+
+        pos = t * self.TOTAL_TIMES / float(time_cap)
+        idx = int(math.floor(pos)) % self.TOTAL_TIMES
+        next_idx = (idx + 1) % self.TOTAL_TIMES
+
+        a = self.times[idx]
+        b = self.times[next_idx]
+
+        seg_t = pos - idx
+        seg_t = self.smoothstep_python(seg_t)
+
+        return tuple(self.mix(a[i], b[i], seg_t) for i in range(4))
+
     def pre_draw(self):
+        screen_size = et.get_screen_size()
+
         main_cam = Camera.get_main_camera()
         main_cam_pos = main_cam.get_pos()
         main_cam_scale = main_cam.get_scale()
-        
-        ShaderHandler.set_shader("map")
 
-        ShaderHandler.set_uniform_value("u_time", "1i", self.time)
-        ShaderHandler.set_uniform_value("u_cam", "2f", main_cam_pos[0], main_cam_pos[1])
-        ShaderHandler.set_uniform_value("u_cam_sc", "2f", main_cam_scale[0], main_cam_scale[1])
-        ShaderHandler.set_uniform_value("u_time_cap", "1i", self.time_cap)
+        lights_pos = [(light.x, light.y, light.z, light.strength) for light in lights]
+        flat_pos = np.array(lights_pos, dtype=np.float32).flatten()
+        lights_color = [(light.r, light.g, light.b) for light in lights]
+        flat_color = np.array(lights_color, dtype=np.float32).flatten()
+
+        ShaderHandler.set_shader("map")
+        ShaderHandler.set_uniform_value("u_time_color", "4f", *self.time_color)
+        ShaderHandler.set_uniform_value("u_player", "2f", main_cam_pos[0], main_cam_pos[1])
+        ShaderHandler.set_uniform_value("u_cam_scale", "2f", main_cam_scale[0], main_cam_scale[1])
         ShaderHandler.set_uniform_value("u_screen", "2f", screen_size[0], screen_size[1])
-    
+        ShaderHandler.set_uniform_value("u_lights", "4fv", *(len(lights_pos), flat_pos))
+        ShaderHandler.set_uniform_value("u_lights_color", "3fv", *(len(lights_color), flat_color))
+        ShaderHandler.set_uniform_value("u_count_lights", "1i", len(lights_pos))
+        
         for key in self.chunks.keys():
             chunk_x, chunk_y = map(int, key.split(","))
 
@@ -101,7 +148,7 @@ class Player(Entity):
         self.cam = et.get_cam("main")
         self.z = 0
         self.grv = 0.2
-        self.speed = .3
+        self.speed = .2
         self.vel_x = 0
         self.vel_y = 0
         self.vel_z = 0
@@ -109,19 +156,17 @@ class Player(Entity):
         self.nickname = name
         self.controllable = controllable
         self.interp_time = 0
-        self.server_update_step = 60 / 20
+        self.server_update_step = GameLoop.get_fps() / 20#server.UPDATES
 
         vh, vw = et.get_screen_size()
         self.cam_follow_pos = [(self.x - vh / 2), (self.y - vw / 2)]
 
     def interp_pos(self, pos):
-        self.x = pos[0]
-        self.y = pos[1]
-        # self.goal_x = pos[0]
-        # self.goal_y = pos[1]
-        # self.start_x = self.x
-        # self.start_y = self.y
-        # self.interp_time = self.server_update_step
+        self.goal_x = pos[0]
+        self.goal_y = pos[1]
+        self.start_x = self.x
+        self.start_y = self.y
+        self.interp_time = self.server_update_step
 
     def tick(self):
         self.x += self.vel_x
@@ -138,13 +183,16 @@ class Player(Entity):
 
         self.set_layer(self.y + 24)
 
-        # if self.interp_time > 0:
-        #     t = self.interp_time / self.server_update_step
-        #     self.x = self.goal_x * t + self.start_x * (1 - t)
-        #     self.y = self.goal_y * t + self.start_y * (1 - t)
-        #     self.interp_time -= 1
+        if self.interp_time > 0:
+            t = 1 - (self.interp_time / self.server_update_step)
+            self.x = self.goal_x * t + self.start_x * (1 - t)
+            self.y = self.goal_y * t + self.start_y * (1 - t)
+            self.interp_time -= 1
 
         if self.controllable:
+            if Input.get_press(K_ESCAPE):
+                GameLoop.end()
+
             if Input.get_press(K_t) and not Commander.showing_chat:
                 Commander.start_chat(self)
 
@@ -165,14 +213,168 @@ class Player(Entity):
             self.cam_follow_pos[1] -= ((self.cam_follow_pos[1]) - (self.y - vw / 2)) / 5
             self.cam.set_pos(self.cam_follow_pos)
 
+    @staticmethod
+    def interp_python(Original, u_time_color):
+        a_r, a_g, a_b, a_a = Original
+        b_r, b_g, b_b, _   = u_time_color
+        t = u_time_color[3]
 
-    def get_mvp(self):
-        return Transformation.affine_transform((self.x, self.y - self.z - 3), (self.width, self.height), self.angle, static=False)
+        if t < 0.0:
+            t = 0.0
+        elif t > 1.0:
+            t = 1.0
+
+        r = a_r * (1.0 - t) + b_r * t
+        g = a_g * (1.0 - t) + b_g * t
+        b = a_b * (1.0 - t) + b_b * t
+
+        return (r, g, b, a_a)
+
+    def draw(self):
+        color = game_map.time_color
+        ShaderHandler.set_shader("def_map")
+        ShaderHandler.set_uniform_value("u_time_color", "4f", *color)
+
+        color = self.interp_python((1,1,1,1), color)
+
+        for light in lights:
+            d = ((self.x - light.x) ** 2 + (self.y - light.y) ** 2) ** 0.5
+            exp_v = Tools.clamp(0, 1, d / light.strength)
+            I = 2.7 ** (-5 * exp_v) - 2.7 ** -5
+            I /= 1 - 2.7**-5
+            light_color = (max(color[0], light.r), max(color[1], light.g), max(color[1], light.b), 1)
+            color = (color[0] * (1 - I) + light_color[0] * I, color[1] * (1 - I) + light_color[1] * I, color[2] * (1 - I) + light_color[2] * I)
+    
+        et.draw_image(et.tex(self.image), (self.x, self.y - self.z - 3), (self.width, self.height), color=color)
+
+class Slime(Entity):
+    def __init__(self, pos, color, size=1):
+        super().__init__(pos, "slime5", (32 * size, 32 * size))
+        self.color = color
+        self.size = size
+        self.z = 0
+        self.vel_x = 0
+        self.vel_y = 0
+        self.vel_z = 0
+        self.grv = 0.2
+        self.speed = 0.025
+        self.time_to_jump = 200
+        self.target = None
+        self.target_move = [0, 0]
+        self.air = False
+        self.fall_time = 0
+
+    def tick(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.z += self.vel_z
+
+        if self.z <= 0:
+            self.vel_x *= 0.75
+            self.vel_y *= 0.75
+            self.z = 0
+            if self.air:
+                self.fall_time = self.time_to_jump
+                self.air = False
+        else:
+            self.vel_z -= self.grv
+
+        self.set_layer(self.y + 24)
+
+        player_dist = ((self.x - player.x) ** 2 + (self.y - player.y) ** 2) ** 0.5
+
+        if player_dist < 100:
+            self.target = (player.x, player.y)
+            if self.time_to_jump > -40:
+                self.time_to_jump = max(-40, self.time_to_jump - 10)
+
+        if self.time_to_jump > -40:
+            self.time_to_jump = max(-40, self.time_to_jump - 5)
+
+        if self.time_to_jump < 100:
+            sprite_index = int(Tools.clamp(0, 10, 10 - self.time_to_jump / 20))
+            self.image = f"slime{sprite_index}"
+        else:
+            t = (self.fall_time - self.time_to_jump) / 50
+            sprite_index = int(Tools.clamp(5, 10, 5 + 3 * (1 - cos(t)) * 0.9 ** t))
+            self.image = f"slime{sprite_index}"
+
+        if self.time_to_jump <= -40:
+            sprite_index = int(Tools.clamp(0, 10, 6 - (-self.time_to_jump - 40)))
+            self.image = f"slime{sprite_index}"
+            self.time_to_jump -= 1
+            if self.time_to_jump < -45:
+                if player_dist < 100:
+                    self.target = (player.x, player.y)
+                else:
+                    self.target = (self.x + random.random() * 60 - 30, self.y + random.random() * 60 - 30)
+
+                target_dist = ((self.target[0] - self.x) ** 2 + (self.target[1] - self.y) ** 2) ** 0.5
+                self.vel_z = Tools.clamp(2.5, 3.6, target_dist / 10)
+                self.target_move[0] = min((self.target[0] - self.x) * self.speed, 1.4)
+                self.target_move[1] = min((self.target[1] - self.y) * self.speed, 1.4)
+
+                self.air = True
+
+                self.time_to_jump = 1200 + random.random() * 500
+
+        if self.z > 0:
+            sprite_index = int(Tools.clamp(0, 5, 5 - abs(self.vel_z * 2)))
+            self.image = f"slime{sprite_index}"
+            self.vel_x = self.target_move[0]
+            self.vel_y = self.target_move[1]
+
+    @staticmethod
+    def interp_python(Original, u_time_color):
+        a_r, a_g, a_b, a_a = Original
+        b_r, b_g, b_b, _   = u_time_color
+        t = u_time_color[3]
+
+        if t < 0.0:
+            t = 0.0
+        elif t > 1.0:
+            t = 1.0
+
+        r = a_r * (1.0 - t) + b_r * t
+        g = a_g * (1.0 - t) + b_g * t
+        b = a_b * (1.0 - t) + b_b * t
+
+        return (r, g, b, a_a)
+
+    def draw(self):
+        color = game_map.time_color
+        ShaderHandler.set_shader("def_map")
+        ShaderHandler.set_uniform_value("u_time_color", "4f", *color)
+
+        color = self.interp_python((1,1,1,1), color)
+
+        for light in lights:
+            d = ((self.x - light.x) ** 2 + (self.y - light.y) ** 2) ** 0.5
+            exp_v = Tools.clamp(0, 1, d / light.strength)
+            I = 2.7 ** (-5 * exp_v) - 2.7 ** -5
+            I /= 1 - 2.7**-5
+            light_color = (max(color[0], light.r), max(color[1], light.g), max(color[1], light.b), 1)
+            color = (color[0] * (1 - I) + light_color[0] * I, color[1] * (1 - I) + light_color[1] * I, color[2] * (1 - I) + light_color[2] * I)
+
+        color = (color[0] * self.color[0], color[1] * self.color[1], color[2] * self.color[2])
+
+        et.draw_image(et.tex(self.image), (self.x, self.y - self.z - 3), (self.width, self.height), color=color)
+
+class Light(Entity):
+    def __init__(self, pos, strength, color=(255, 255, 255)):
+        super().__init__(pos)
+        self.strength = strength
+        self.z = pos[2]
+        self.r = color[0] / 255
+        self.g = color[1] / 255
+        self.b = color[2] / 255
 
 class Commander(Entity):
     _context = {}
     showing_chat = False
     chat_text = ""
+    chat_text_pointer = 0
+    chat_text_selection = 0
     _using = None
     feed = []
     typed_feed = []
@@ -181,37 +383,52 @@ class Commander(Entity):
     caps = False
     players = {}
     chat_font = pg.font.Font(FONTS / "game_font.ttf", 18)
-    player_name = True
-    game_started = False
-
-    history_scroll = -1
-    current_chat = ""
-
-    IGNORED_COMBOS = {
-        ("ctrl", "j"),
-        ("ctrl", "k"),
-        ("ctrl", "l"),
-    }
-
-    pressed_modifiers = set()
+    input_listener = None
 
     def __init__(self):
         super().__init__((0, 0), None)
 
     @classmethod
+    def esc_logic(cls, message):
+        cls.chat_text = ""
+        cls.set_chatting(False)
+        return False
+
+    @classmethod
+    def enter_logic(cls, message):
+        if message == "":
+            cls.set_chatting(False)
+
+            return False
+        
+        output = cls.process(message, cls._using)
+        if not output == None:
+            cls.feed.insert(0, output)
+            if len(cls.feed) > cls.max_messages:
+                cls.feed.pop(-1)
+
+        cls.typed_feed.insert(0, message)
+        cls.chat_text = ""
+        cls.set_chatting(False)
+        return False
+
+    @classmethod
     def start_chat(cls, entity):
-        listener = keyboard.Listener(on_press=Commander.on_press, on_release=Commander.on_release)
-        listener.start()
+        cls.input_listener = InputListener({
+            ("ctrl", "j"),
+            ("ctrl", "k"),
+            ("ctrl", "l")
+        }, cls.typed_feed, esc_logic=cls.esc_logic, enter_logic=cls.enter_logic)
         Commander.set_chatting(True)
-        Commander.history_scroll = -1
         Commander.set_using(entity)
 
     @classmethod
     def tick(cls):
-        if not cls.player_name and not cls.game_started:
-            game_start(cls.chat_text)
-            cls.chat_text = ""
-            cls.game_started = True
+        if not cls.input_listener == None:
+            if cls.input_listener.listener.is_alive():
+                cls.chat_text = cls.input_listener.message
+                cls.chat_text_pointer = cls.input_listener.pointer
+                cls.chat_text_selection = cls.input_listener.select_pointer
 
     def draw(self):
         pass
@@ -227,122 +444,6 @@ class Commander(Entity):
     @classmethod
     def set_font(cls, font):
         cls.chat_font = font
-
-    @classmethod
-    def get_modifiers(cls):
-        mods = []
-        if any(m in cls.pressed_modifiers for m in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r)):
-            mods.append("ctrl")
-        if any(m in cls.pressed_modifiers for m in (keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r)):
-            mods.append("shift")
-        if any(m in cls.pressed_modifiers for m in (keyboard.Key.alt_l, keyboard.Key.alt_r)):
-            mods.append("alt")
-        return mods
-
-    @classmethod
-    def on_press(cls, key):
-        if not Input.get_focus():
-            return
-        
-        mods = cls.get_modifiers()
-        is_ctrl = "ctrl" in mods
-        is_shift = "shift" in mods
-        is_alt = "alt" in mods
-        if isinstance(key, keyboard.Key):
-            if key == keyboard.Key.up:
-                if cls.history_scroll == -1:
-                    cls.current_chat = cls.chat_text
-                
-                if cls.history_scroll > len(cls.typed_feed) or len(cls.typed_feed) == 0:
-                    return
-                
-                cls.history_scroll += 1
-                cls.chat_text = cls.typed_feed[cls.history_scroll]
-    
-                return
-            
-            if key == keyboard.Key.down:
-                if cls.history_scroll == 0:
-                    cls.chat_text = cls.current_chat
-                    return
-
-                if cls.history_scroll == -1:
-                    return
-                
-                cls.history_scroll -= 1
-                cls.chat_text = cls.typed_feed[cls.history_scroll]
-    
-                return
-
-            if key == keyboard.Key.space:
-                cls.chat_text += " "
-                return
-
-            if key == keyboard.Key.backspace:
-                if len(cls.chat_text) > 0:
-                    if is_ctrl:
-                        idx = cls.chat_text.rstrip().rfind(" ")
-                        if idx == -1:
-                            cls.chat_text = ""
-                        else:
-                            cls.chat_text = cls.chat_text[:idx+1]
-                    else:
-                            cls.chat_text = cls.chat_text[:-1]
-
-                return
-
-            cls.pressed_modifiers.add(key)
-            return
-
-        char = key.char
-        if char is None:
-            return
-        char = char.lower()
-        combo = tuple(mods + [char])
-
-
-        if combo in cls.IGNORED_COMBOS:
-            return
-
-        caps = Input.get_caps()
-        caps_case = not caps if is_shift else caps
-        cls.chat_text += key.char.upper() if caps_case else key.char
-
-    @classmethod
-    def on_release(cls, key):
-        if not Input.get_focus():
-            return
-        
-        if key in cls.pressed_modifiers:
-            cls.pressed_modifiers.remove(key)
-
-        if key == keyboard.Key.esc and not cls.player_name:
-            return False
-        
-        if key == keyboard.Key.enter:
-            if cls.player_name:
-                if len(cls.chat_text) > 0:
-                    cls.set_chatting(False)
-                    cls.player_name = False
-
-                return False
-            
-            if cls.chat_text == "":
-                cls.set_chatting(False)
-
-                return False
-            
-            output = cls.process(cls.chat_text, cls._using)
-            if not output == None:
-                cls.feed.insert(0, output)
-                if len(cls.feed) > cls.max_messages:
-                    cls.feed.pop(-1)
-
-            cls.typed_feed.insert(0, cls.chat_text)
-            cls.chat_text = ""
-            cls.set_chatting(False)
-
-            return False
 
     @classmethod
     def set_context(cls, context):
@@ -402,6 +503,12 @@ class Commander(Entity):
                     cls._context["player"] = caller
                     Client.join_server(tokens[1], cls)
                     return {"text": f"Connected successfully at: {tokens[1]}", "type": "success"}
+                
+                elif tokens[0] == "create":
+                    if tokens[1] == "light":
+                        lights.append(Light((caller.x, caller.y, caller.z), 20))
+                    elif tokens[1] == "slime":
+                        slimes.append(Slime((caller.x, caller.y), (random.random(), random.random(), random.random()), random.random()*0.3 + 0.5))
             else:
                 return {"text": command, "type": "global", "user": caller.nickname}
         except Exception as e:
@@ -413,7 +520,29 @@ class Commander(Entity):
     def selector_process(cls, selection, caller):
         if selection == "self":
             return [caller]
-    
+        if selection[:2] == "@e":
+            passed_entities = []
+            filters = []
+            if len(selection) > 2:
+                if selection[2] == "[":
+                    filtering = selection[3:-1].split(",")
+                    for token in filtering:
+                        base, value = token.split("=")
+                        if base == "type":
+                            filters.append(lambda x: str(x.__class__)[str(x.__class__).rfind(".")+1:-2] == value)
+
+                all_entities = EntityManager.get_all_entities()
+                for key in all_entities:
+                    for entity in all_entities[key]:
+                        passed = True
+                        for filter_func in filters:
+                            if not filter_func(entity):
+                                passed = False
+                                break
+                        if passed:
+                            passed_entities.append(entity)
+            return passed_entities
+
     @classmethod
     def get_server_data(cls):
         return {"game_time": game_map.time,
@@ -440,12 +569,6 @@ class Commander(Entity):
             cls.players[data["name"]].interp_pos((data["pos"][0], data["pos"][1]))
 
     @classmethod
-    def ask_player_name(cls):
-        listener = keyboard.Listener(on_press=cls.on_press, on_release=cls.on_release)
-        listener.start()
-        cls.set_chatting(True)
-
-    @classmethod
     def set_chatting(cls, val):
         cls.showing_chat = val
 
@@ -455,10 +578,35 @@ class Commander(Entity):
 
         screen_size = et.get_screen_size()
         if cls.showing_chat:
+            if cls.chat_text_selection < cls.chat_text_pointer:
+                side = -1
+                shift_section = cls.chat_text[cls.chat_text_selection:cls.chat_text_pointer]
+            else:
+                side = 1
+                shift_section = cls.chat_text[cls.chat_text_pointer:cls.chat_text_selection]
+
             font_surf = cls.chat_font.render(cls.chat_text, True, (255, 255, 255))
-            texture = ShaderHandler.add_texture(font_surf, True)
+            texture = ShaderHandler.add_texture(font_surf, True, "chat")
+
+            
+            width = cls.chat_font.size(cls.chat_text[:cls.chat_text_pointer])[0]
+
             et.draw_image(et.tex("pixel"), (screen_size[0] / 2, screen_size[1] - 16), (screen_size[0], 32), color=(0, 0, 0), alpha=0.5, static=True)
+
+
             et.draw_image(texture, (texture["width"] / 2 + 10, screen_size[1] - 16), (texture["width"], texture["height"]), color=(255, 255, 255), alpha=1, static=True)
+
+            if not shift_section == "":
+                sec_font_surf = cls.chat_font.render(shift_section, True, (0, 0, 0))
+                sec_texture = ShaderHandler.add_texture(sec_font_surf, True, "chat_hover")
+                sec_width, sec_height = cls.chat_font.size(shift_section)
+                et.draw_image(et.tex("pixel"), (width + side * sec_width / 2 + 10, screen_size[1] - 16), (sec_width, sec_height), color=(255, 255, 255), alpha=.75, static=True)
+                et.draw_image(sec_texture, (width + side * sec_width / 2 + 10, screen_size[1] - 16), (sec_texture["width"], sec_texture["height"]), color=(0, 0, 0), alpha=1, static=True)
+                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(0, 0, 0), alpha=1, static=True)
+                return
+
+            et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), alpha=1, static=True)
+
 
         for idx, message in enumerate(cls.feed):
             if idx >= 8: break
@@ -478,24 +626,69 @@ class Commander(Entity):
                 text_color = (0.75, 0.75, 0.75)
 
             font_surf = cls.chat_font.render(feed_text, True, (255, 255, 255))
-            texture = ShaderHandler.add_texture(font_surf, True)
+            texture = ShaderHandler.add_texture(font_surf, True, f"chat_{idx}")
             et.draw_image(et.tex("pixel"), (texture["width"] / 2 + 10, screen_size[1] - 48 - 32 * idx), (texture["width"] + 20, 32), color=(0, 0, 0), alpha=0.5 * show_opacity, static=True)
             et.draw_image(texture, (texture["width"] / 2 + 10, screen_size[1] - 48 - 32 * idx), (texture["width"], texture["height"]), color=text_color, alpha=1 * show_opacity, static=True)
+            
+class MenuManager(Entity):
+    def __init__(self):
+        super().__init__((0, 0))
+        self.chat_font = pg.font.Font(FONTS / "game_font.ttf", 32)
+        self.player_name = ""
+        self.player_name_text_pointer = 0
+        self.ask_player_name()
 
-def game_start(player_name):
-    GameLoop.set_background_color((98 / 255, 168 / 255, 242 / 255, 0.0))
+    @staticmethod
+    def enter_logic(message):
+        if len(message) > 0:
+            return False
 
-    global player, game_map
-    player = Player((0, 0), player_name, True)
-    game_map = Map()
-    Commander.players[player.nickname] = player
+    @classmethod
+    def ask_player_name(cls):
+        cls.input_listener = InputListener({
+            ("ctrl", "j"),
+            ("ctrl", "k"),
+            ("ctrl", "l"),
+        }, esc_logic=lambda a: GameLoop.end(), enter_logic=cls.enter_logic, shift_operations=False)
+
+    def tick(self):
+        if self.input_listener.listener.is_alive():
+            self.player_name = self.input_listener.message
+            self.player_name_text_pointer = self.input_listener.pointer
+        else:
+            self.game_start(self.player_name)
+            EntityManager.remove_entity_layer(self)
+
+    def draw_gui(self):
+        screen_size = et.get_screen_size()
+
+        ShaderHandler.set_shader("screen")
+        et.set_font(self.chat_font)
+        et.draw_text("Nome do usuario:", (screen_size[0] / 2, screen_size[1] / 2), (1, 1), color=(255, 255, 255), alpha=1, static=True, occupation="username_text", align=[0, -1])
+        text_surf = et.draw_text(self.player_name, (screen_size[0] / 2, screen_size[1] / 2), (1, 1), color=(255, 255, 255), alpha=1, static=True, occupation="username", align=[0, 1])
+
+        width, height = self.chat_font.size(self.player_name[:self.player_name_text_pointer])
+        et.draw_image(et.tex("pixel"), (screen_size[0] / 2 - text_surf["width"] / 2 + width, screen_size[1] / 2 + height / 2), (3, 32), color=(255, 255, 255), alpha=1, static=True)
+        
+    @staticmethod
+    def game_start(player_name):
+        GameLoop.set_background_color((98 / 255, 168 / 255, 242 / 255, 0.0))
+        global player, game_map, commander, slimes, lights
+        commander = Commander()
+        player = Player((0, 0), player_name, True)
+        slimes = []
+        game_map = Map()
+        lights = []
+        Commander.players[player.nickname] = player
 
 def pre_load_game():
     ShaderHandler.add_shader_file("map")
     ShaderHandler.add_shader_file("screen")
+    ShaderHandler.add_shader_file("def_map")
 
-    global screen_size
-    screen_size = (1200, 600)
+    GameLoop.set_resizable(True)
+    GameLoop.set_can_fullscreen(True)
+    screen_size = (GameLoop.view_width, GameLoop.view_height)
     GameLoop.set_screen_size(screen_size)
     GameLoop.set_title("Jogão")
     GameLoop.setup()
@@ -507,10 +700,22 @@ def pre_load_game():
     Texture.set_texture("grass1", SOURCES / "grass1.png", True)
     Texture.set_texture("sand0", SOURCES / "sand.png", True)
 
+    Texture.set_texture("slime0", SOURCES / "entities" / "slime" / "slime0.png")
+    Texture.set_texture("slime1", SOURCES / "entities" / "slime" / "slime1.png")
+    Texture.set_texture("slime2", SOURCES / "entities" / "slime" / "slime2.png")
+    Texture.set_texture("slime3", SOURCES / "entities" / "slime" / "slime3.png")
+    Texture.set_texture("slime4", SOURCES / "entities" / "slime" / "slime4.png")
+    Texture.set_texture("slime5", SOURCES / "entities" / "slime" / "slime5.png")
+    Texture.set_texture("slime6", SOURCES / "entities" / "slime" / "slime6.png")
+    Texture.set_texture("slime7", SOURCES / "entities" / "slime" / "slime7.png")
+    Texture.set_texture("slime8", SOURCES / "entities" / "slime" / "slime8.png")
+    Texture.set_texture("slime9", SOURCES / "entities" / "slime" / "slime9.png")
+    Texture.set_texture("slime10", SOURCES / "entities" / "slime" / "slime10.png")
+
     cam = Camera.get_main_camera()
     cam.set_scale((5, 5))
 
-    Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN)
+    Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y)
 
     Testing.set_def_cap(1000)
 
@@ -519,8 +724,7 @@ def pre_load_game():
 if __name__ == "__main__":
     pre_load_game()
 
-    Commander()
-    Commander.ask_player_name()
+    MenuManager()
 
     GameLoop.start()
 

@@ -506,12 +506,33 @@ class Commander(Entity):
                     return {"text": f"Connected successfully at: {tokens[1]}", "type": "success"}
                 
                 elif tokens[0] == "create":
-                    if tokens[1] == "light":
+                    if tokens[1] == "Light":
                         lights.append(Light((caller.x, caller.y, caller.z), 20))
-                    elif tokens[1] == "slime":
+                    elif tokens[1] == "Slime":
                         slimes.append(Slime((caller.x, caller.y), (random.random(), random.random(), random.random()), random.random()*0.3 + 0.5))
+                    else:
+                        raise TypeError(f"Unknown entity \"{tokens[1]}\"")
+
+                    return {"text": f"{tokens[1]} created at: {caller.x}, {caller.y}", "type": "success"}
+                elif tokens[0] == "cam":
+                    if tokens[1] == "size":
+                        if tokens[2] == "int":
+                            cam = Camera.get_main_camera()
+                            cam.set_scale((int(tokens[3]), int(tokens[4])))
+                        if tokens[2] == "float":
+                            cam = Camera.get_main_camera()
+                            cam.set_scale((float(tokens[3]), float(tokens[4])))
+                    elif tokens[1] == "angle":
+                        if tokens[2] == "int":
+                            cam = Camera.get_main_camera()
+                            cam.set_angle((int(tokens[3]) * math.pi / 180))
+                        if tokens[2] == "float":
+                            cam = Camera.get_main_camera()
+                            cam.set_angle((float(tokens[3]) * math.pi / 180))
+                    
                 else:
                     raise TypeError(f"Unknown command \"{tokens[0]}\"")
+
             else:
                 return {"text": command, "type": "global", "user": caller.nickname}
         except Exception as e:
@@ -608,6 +629,8 @@ class Commander(Entity):
                 et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(0, 0, 0), alpha=1, static=True)
             else:
                 et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), alpha=1, static=True)
+            else:
+                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), alpha=1, static=True)
 
             et.draw_image(et.tex("pixel"), (screen_size[0] - 20, screen_size[1] / 2), (20, 500), 0, (0.5, 0.5, 0.5), static=True)
             et.draw_image(et.tex("pixel"), (screen_size[0] - 50, screen_size[1] / 2), (20, 500), 0, (0.5, 0.5, 0.5), static=True)
@@ -644,6 +667,8 @@ class MenuManager(Entity):
         self.player_name = ""
         self.player_name_text_pointer = 0
         self.ask_player_name()
+        random.seed(1)
+        # self.value = str(random.random())
 
     @staticmethod
     def valid_username(message):
@@ -679,8 +704,13 @@ class MenuManager(Entity):
             EntityManager.remove_entity_layer(self)
 
     def draw_gui(self):
-        screen_size = et.get_screen_size()
+        # screen_size = et.get_screen_size()
+        # ShaderHandler.set_shader("screen")
+        # et.set_font(self.chat_font)
+        # et.draw_text(self.value, (screen_size[0] / 2, screen_size[1] / 2), (1, 1), color=(255, 255, 255), alpha=1, static=True, occupation="username_text", align=[0, -1])
+        # return
 
+        screen_size = et.get_screen_size()
         ShaderHandler.set_shader("screen")
         et.set_font(self.chat_font)
         et.draw_text("Nome do usuario:", (screen_size[0] / 2, screen_size[1] / 2), (1, 1), color=(255, 255, 255), alpha=1, static=True, occupation="username_text", align=[0, -1])

@@ -129,12 +129,11 @@ class InputListener:
 
     def on_press(self, key):
         if not Input.get_focus():
-            return
+           return
         
         mods = self.get_modifiers()
         is_ctrl = "ctrl" in mods
         is_shift = "shift" in mods
-        # is_alt = "alt" in mods
         if isinstance(key, keyboard.Key):
             if key == keyboard.Key.left:
                 if self.pointer > 0:

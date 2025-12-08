@@ -34,7 +34,7 @@ class Map(Entity):
         self.time_cap = 24000
         self.time_vel = 1
         self.times = [
-            (0.0, 0.0, 0.0, 0.95),
+            (0.1, 0.1, 0.2, 0.7),
             (0.0, 0.0, 0.0, 0.9),
             (45/255, 90/255, 150/255, 0.2),
             (1.0, 1.0, 1.0, 0.0),
@@ -606,10 +606,14 @@ class Commander(Entity):
                 et.draw_image(et.tex("pixel"), (width + side * sec_width / 2 + 10, screen_size[1] - 16), (sec_width, sec_height), color=(255, 255, 255), alpha=.75, static=True)
                 et.draw_image(sec_texture, (width + side * sec_width / 2 + 10, screen_size[1] - 16), (sec_texture["width"], sec_texture["height"]), color=(0, 0, 0), alpha=1, static=True)
                 et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(0, 0, 0), alpha=1, static=True)
-                return
+            else:
+                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), alpha=1, static=True)
 
-            et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), alpha=1, static=True)
-
+            et.draw_image(et.tex("pixel"), (screen_size[0] - 20, screen_size[1] / 2), (20, 500), 0, (0.5, 0.5, 0.5), static=True)
+            et.draw_image(et.tex("pixel"), (screen_size[0] - 50, screen_size[1] / 2), (20, 500), 0, (0.5, 0.5, 0.5), static=True)
+            et.draw_image(et.tex("pixel"), (screen_size[0] - 80, screen_size[1] / 2), (20, 500), 0, (0.5, 0.5, 0.5), static=True)
+            et.draw_image(et.tex("pixel"), (screen_size[0] - 110, screen_size[1] / 2), (20, 500), 0, (0.5, 0.5, 0.5), static=True)
+            print(pg.mouse.get_pos(), )
 
         for idx, message in enumerate(cls.feed):
             if idx >= 8: break
@@ -728,7 +732,7 @@ def pre_load_game():
     Texture.set_texture("slime10", SOURCES / "entities" / "slime" / "slime10.png")
 
     cam = Camera.get_main_camera()
-    cam.set_scale((5, 5))
+    cam.set_scale((2, 2))
 
     Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y)
 

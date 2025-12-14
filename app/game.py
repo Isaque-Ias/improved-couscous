@@ -860,7 +860,7 @@ def pre_load_game():
     Texture.set_texture("slime10", SOURCES / "entities" / "slime" / "slime10.png")
 
     cam = Camera.get_main_camera()
-    cam.set_scale((5, 5))
+    cam.set_scale((2, 2))
 
     Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y, K_u)
 

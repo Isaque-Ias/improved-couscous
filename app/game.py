@@ -14,10 +14,10 @@ from pathlib import Path
 from texture import Texture
 from camera import Camera
 from testing import Testing
-import random
 import math
-from math import cos
+from math import cos, sin, pi
 import numpy as np
+import bisect
 
 CWD = Path.cwd()
 SOURCES = CWD / "app" / "sources"
@@ -27,63 +27,199 @@ SHADERS = CWD / "app" / "shaders"
 pg.font.init()
 
 class Map(Entity):
-    chunks = {}
     def __init__(self):
         super().__init__((0, 0), None)
-        self.time = 6000
+        self.time = 7000
         self.time_cap = 24000
         self.time_vel = 1
-        self.times = [
-            (0.0, 0.0, 0.0, 0.95),
-            (0.0, 0.0, 0.0, 0.9),
-            (45/255, 90/255, 150/255, 0.2),
-            (1.0, 1.0, 1.0, 0.0),
-            (1.0, 1.0, 1.0, 0.0),
-            (250/255, 165/255, 45/255, 0.2),
-            (0.0, 0.0, 0.0, 0.9)
+        self.chunks = {}
+        self.chunk_buffer = {}
+        self.chunk_radius = 2
+        self.times_r = [
+            (0, .03, 0),
+            (0.15, .03, 0),
+            (0.24, 0.21, 2),
+            (0.4, 0.8, 3),
+            (0.66, 0.8, -3),
+            (0.8, .18, -2),
+            (0.9, .03, 0),
+            (1, .03, 0),
         ]
-        self.time_color = (1,1,1,1)
-        self.TOTAL_TIMES = len(self.times)
+        self.times_g = [
+            (0, .03, 0),
+            (0.15, .03, 0),
+            (0.24, 0.4, 2),
+            (0.4, 0.85, 3),
+            (0.66, 0.7, -3),
+            (0.8, .1, -2),
+            (0.9, .03, 0),
+            (1, .03, 0),
+        ]
+        self.times_b = [
+            (0, .03, 0),
+            (0.15, .03, 0),
+            (0.24, 0.6, 2),
+            (0.4, 0.9, 3),
+            (0.66, 0.6, -3),
+            (0.8, .05, -2),
+            (0.9, .03, 0),
+            (1, .03, 0),
+        ]
+        self.time_color = (1,1,1)
 
-        for x in range(-3, 3):
-            for y in range(-3, 3):
-                chunk_sprites = [random.choice([et.tex("grass0")["texture"], et.tex("grass1")["texture"], et.tex("sand0")["texture"]]) for _ in range(64)]
-                atlas_tex = self.build_chunk_atlas(chunk_sprites, 32, 15)
-                self.chunks[f"{x},{y}"] = ShaderHandler.add_texture(atlas_tex)
+        self.t_x = 0
+        self.t_y = 0
+        self.chunk_job = None
+
+        self.seed = int(random.random() * 10000)
 
         self.shaders = ShaderHandler.get_shader_program("map")
+
+    @staticmethod
+    def rng(seed: int, value: int) -> int:
+        x = value
+        x ^= seed * 0x9E3779B9
+        x ^= x >> 16
+        x *= 0x85EBCA6B
+        x ^= x >> 13
+        x *= 0xC2B2AE35
+        x ^= x >> 16
+        return x & 0xFFFFFFFF
+
+    def rng_float(self, seed, value):
+        if isinstance(value, str):
+            value = self.hash_string(value)
+        return self.rng(seed, value) / 2**32
+    
+    @staticmethod
+    def hash_string(s: str) -> int:
+        h = 2166136261
+        for c in s:
+            h ^= ord(c)
+            h *= 16777619
+            h &= 0xFFFFFFFF
+        return h
+    
+    def get_chunk_coords(self, coords):
+        w = 16
+        h = 8
+        t_x = coords[0] / w - ((coords[0] * h / w - coords[1]) / (2 * h))
+        t_y = (coords[0] * h / w - coords[1]) / (2 * h)
+        t_x = int((t_x - 4) // 8) + 1
+        t_y = int((t_y - 4) // 8) + 1
+        return t_x, t_y
 
     def tick(self):
         self.time += self.time_vel
         if self.time >= self.time_cap:
             self.time = 0
-        self.time_color = self.time_lerp(self.time, self.time_cap)
+        self.time_color = self.time_spline(self.time)
 
+        t_x, t_y = self.get_chunk_coords((player.x, player.y))
+
+        self.update_chunks(t_x, t_y)
+
+        self.t_x = t_x
+        self.t_y = t_y
+
+    def prune_chunks(self):
+        self.chunk_buffer = {}
+
+    def fade(self, t):
+        return t * t * t * (t * (t * 6 - 15) + 10)
+
+    def get_chunk_block(self, coordinate, chunk_idx):
+        chunk_x = chunk_idx // 8
+        chunk_y = chunk_idx % 8
+        coord_x, coord_y = coordinate
+
+        dots = []
+        for corner in range(4):
+            x = corner % 2
+            y = corner // 2
+            ang = self.rng_float(self.seed, f"{coord_x + x},{coord_y + y}") * np.pi
+
+            vec = np.array([np.cos(ang), np.sin(ang)], dtype=float)
+            dx = (chunk_x / 8) - x
+            dy = (chunk_y / 8) - y
+            point_vec = np.array([dx, dy], dtype=float)
+
+            dots.append(np.dot(point_vec, vec))
+
+        tx = self.fade(chunk_x / 8)
+        ty = self.fade(chunk_y / 8)
+
+        interp_x_top    = dots[0] * (1 - tx) + dots[1] * tx
+        interp_x_bottom = dots[2] * (1 - tx) + dots[3] * tx
+        dot = interp_x_top * (1 - ty) + interp_x_bottom * ty
+        
+        return f"grass{int((dot+1) * 5)}"
+        # self.rng_float(
+        #     self.seed,
+        #     self.hash_string(f"{coord_x},{coord_y},{chunk_idx}")
+        # )
+        # [et.tex("grass0")["texture"],
+        # et.tex("grass1")["texture"],
+        # et.tex("sand0")["texture"]]
+        # [ * 3)
+        
+    def generate_chunk(self, t_x, t_y):
+        diameter = (2 * self.chunk_radius + 1)
+        for idx in range(diameter ** 2):
+            x = (idx % diameter) - self.chunk_radius
+            y = idx // diameter - self.chunk_radius
+            key = f"{t_x + x},{t_y + y}"
+            if key not in self.chunk_buffer:
+                chunk_sprites = [et.tex(self.get_chunk_block((t_x + x, t_y + y), i))["texture"] for i in range(64)]
+
+                atlas_tex = self.build_chunk_atlas(chunk_sprites, 32, 15)
+                self.chunk_buffer[key] = [atlas_tex, (x, y)]
+
+            yield
+
+    def update_chunks(self, t_x, t_y):
+        if self.chunk_job is None:
+            self.prune_chunks()
+            self.chunk_job = self.generate_chunk(t_x, t_y)
+
+        try:
+            next(self.chunk_job)
+        except StopIteration:
+            self.chunk_job = None
+            self.chunks = {}
+            for key in self.chunk_buffer:
+                atlas_tex = self.chunk_buffer[key][0]
+                x, y = self.chunk_buffer[key][1]
+                self.chunks[key] = ShaderHandler.add_texture(
+                    atlas_tex,
+                    occupation=f"chunk:{x},{y}"
+                )
+            
     def draw(self):
         pass
 
-    @staticmethod
-    def mix(a, b, t):
-        return a * (1.0 - t) + b * t
+    def get_time_coefficients(self, interval, l):
+        p_x, p_y, p_m = l[interval]
+        p_x2, p_y2, p_m2 = l[interval + 1]
+        h = p_x2 - p_x
 
-    @staticmethod
-    def smoothstep_python(t):
-        return t
+        a = p_y
+        b = p_m
+        c = 3 * (p_y2 - p_y) / h ** 2 - (2 * p_m + p_m2) / h
+        d = 2 * (p_y - p_y2) / h ** 3 + (p_m + p_m2) / h ** 2
+        
+        return (a, b, c, d)
 
-    def time_lerp(self, time_value, time_cap):
-        t = float(time_value)
-
-        pos = t * self.TOTAL_TIMES / float(time_cap)
-        idx = int(math.floor(pos)) % self.TOTAL_TIMES
-        next_idx = (idx + 1) % self.TOTAL_TIMES
-
-        a = self.times[idx]
-        b = self.times[next_idx]
-
-        seg_t = pos - idx
-        seg_t = self.smoothstep_python(seg_t)
-
-        return tuple(self.mix(a[i], b[i], seg_t) for i in range(4))
+    def time_spline(self, time):
+        t = time / self.time_cap
+        color = [0, 0, 0]
+        lists = (self.times_r, self.times_g, self.times_b)
+        for i in range(3):
+            pair = bisect.bisect_left(lists[i], t, key=lambda x: x[0]) - 1
+            c = self.get_time_coefficients(pair, lists[i])
+            offset = t - lists[i][pair][0]
+            color[i] = c[0] + c[1] * (offset) + c[2] * (offset) ** 2 + c[3] * (offset) ** 3
+        return tuple(color)
 
     def pre_draw(self):
         screen_size = et.get_screen_size()
@@ -98,8 +234,9 @@ class Map(Entity):
         flat_color = np.array(lights_color, dtype=np.float32).flatten()
 
         ShaderHandler.set_shader("map")
-        ShaderHandler.set_uniform_value("u_time_color", "4f", *self.time_color)
-        ShaderHandler.set_uniform_value("u_player", "2f", main_cam_pos[0], main_cam_pos[1])
+        ShaderHandler.set_uniform_value("u_time_color", "3f", *self.time_color)
+        ShaderHandler.set_uniform_value("u_player", "2f", player.x, player.y)
+        ShaderHandler.set_uniform_value("u_cam_pos", "2f", main_cam_pos[0], main_cam_pos[1])
         ShaderHandler.set_uniform_value("u_cam_scale", "2f", main_cam_scale[0], main_cam_scale[1])
         ShaderHandler.set_uniform_value("u_screen", "2f", screen_size[0], screen_size[1])
         ShaderHandler.set_uniform_value("u_lights", "4fv", *(len(lights_pos), flat_pos))
@@ -110,11 +247,11 @@ class Map(Entity):
             chunk_x, chunk_y = map(int, key.split(","))
 
             hw = 32 * 8 // 2
-            hh = 15 * 8 // 2 + .5
+            hh = (15 + 1) * 8 // 2
             chunk_draw_x = hw * chunk_x + hw * chunk_y
             chunk_draw_y = hh * chunk_x - hh * chunk_y
 
-            et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, 15 * 8 + 0.1), 0)
+            et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, (15 + 1) * 8 - 1 + 0.1), 0)
 
     def pg_surface_to_pil(self, surface):
         data = pg.image.tostring(surface, "RGBA", True)
@@ -146,7 +283,7 @@ class Player(Entity):
         self.cam = et.get_cam("main")
         self.z = 0
         self.grv = 0.2
-        self.speed = .2
+        self.speed = 1
         self.vel_x = 0
         self.vel_y = 0
         self.vel_z = 0
@@ -196,13 +333,13 @@ class Player(Entity):
 
             if not Commander.showing_chat:
                 if Input.get_press(K_w):
-                    self.vel_y -= self.speed * 15 / 32
+                    self.vel_y -= self.speed / 10
                 if Input.get_press(K_a):
-                    self.vel_x -= self.speed
+                    self.vel_x -= self.speed / 5
                 if Input.get_press(K_s):
-                    self.vel_y += self.speed * 15 / 32
+                    self.vel_y += self.speed / 10
                 if Input.get_press(K_d):
-                    self.vel_x += self.speed
+                    self.vel_x += self.speed / 5
                 if Input.get_press(K_SPACE) and self.z == 0:
                     self.vel_z = self.jump_power
 
@@ -211,29 +348,10 @@ class Player(Entity):
             self.cam_follow_pos[1] -= ((self.cam_follow_pos[1]) - (self.y - vw / 2)) / 5
             self.cam.set_pos(self.cam_follow_pos)
 
-    @staticmethod
-    def interp_python(Original, u_time_color):
-        a_r, a_g, a_b, a_a = Original
-        b_r, b_g, b_b, _   = u_time_color
-        t = u_time_color[3]
-
-        if t < 0.0:
-            t = 0.0
-        elif t > 1.0:
-            t = 1.0
-
-        r = a_r * (1.0 - t) + b_r * t
-        g = a_g * (1.0 - t) + b_g * t
-        b = a_b * (1.0 - t) + b_b * t
-
-        return (r, g, b, a_a)
-
     def draw(self):
         color = game_map.time_color
         ShaderHandler.set_shader("def_map")
-        ShaderHandler.set_uniform_value("u_time_color", "4f", *color)
-
-        color = self.interp_python((1,1,1,1), color)
+        ShaderHandler.set_uniform_value("u_time_color", "3f", *color)
 
         for light in lights:
             d = ((self.x - light.x) ** 2 + (self.y - light.y) ** 2) ** 0.5
@@ -322,29 +440,10 @@ class Slime(Entity):
             self.vel_x = self.target_move[0]
             self.vel_y = self.target_move[1]
 
-    @staticmethod
-    def interp_python(Original, u_time_color):
-        a_r, a_g, a_b, a_a = Original
-        b_r, b_g, b_b, _   = u_time_color
-        t = u_time_color[3]
-
-        if t < 0.0:
-            t = 0.0
-        elif t > 1.0:
-            t = 1.0
-
-        r = a_r * (1.0 - t) + b_r * t
-        g = a_g * (1.0 - t) + b_g * t
-        b = a_b * (1.0 - t) + b_b * t
-
-        return (r, g, b, a_a)
-
     def draw(self):
         color = game_map.time_color
         ShaderHandler.set_shader("def_map")
-        ShaderHandler.set_uniform_value("u_time_color", "4f", *color)
-
-        color = self.interp_python((1,1,1,1), color)
+        ShaderHandler.set_uniform_value("u_time_color", "3f", *color)
 
         for light in lights:
             d = ((self.x - light.x) ** 2 + (self.y - light.y) ** 2) ** 0.5
@@ -513,7 +612,7 @@ class Commander(Entity):
                     else:
                         raise TypeError(f"Unknown entity \"{tokens[1]}\"")
 
-                    return {"text": f"{tokens[1]} created at: {caller.x}, {caller.y}", "type": "success"}
+                    return {"text": f"{tokens[1]} created at: {caller.x:.1f}, {caller.y:.1f}", "type": "success"}
                 elif tokens[0] == "cam":
                     if tokens[1] == "size":
                         if tokens[2] == "int":
@@ -555,16 +654,17 @@ class Commander(Entity):
                         if base == "type":
                             filters.append(lambda x: str(x.__class__)[str(x.__class__).rfind(".")+1:-2] == value)
 
-                all_entities = EntityManager.get_all_entities()
-                for key in all_entities:
-                    for entity in all_entities[key]:
-                        passed = True
-                        for filter_func in filters:
-                            if not filter_func(entity):
-                                passed = False
-                                break
-                        if passed:
-                            passed_entities.append(entity)
+            all_entities = EntityManager.get_all_entities()
+            for key in all_entities:
+                for entity in all_entities[key]:
+                    passed = True
+                    for filter_func in filters:
+                        if not filter_func(entity):
+                            passed = False
+                            break
+                    if passed:
+                        passed_entities.append(entity)
+            print(passed_entities)
             return passed_entities
 
     @classmethod
@@ -612,7 +712,6 @@ class Commander(Entity):
             font_surf = cls.chat_font.render(cls.chat_text, True, (255, 255, 255))
             texture = ShaderHandler.add_texture(font_surf, True, "chat")
 
-            
             width = cls.chat_font.size(cls.chat_text[:cls.chat_text_pointer])[0]
 
             et.draw_image(et.tex("pixel"), (screen_size[0] / 2, screen_size[1] - 16), (screen_size[0], 32), color=(0, 0, 0), alpha=0.5, static=True)
@@ -626,9 +725,9 @@ class Commander(Entity):
                 sec_width, sec_height = cls.chat_font.size(shift_section)
                 et.draw_image(et.tex("pixel"), (width + side * sec_width / 2 + 10, screen_size[1] - 16), (sec_width, sec_height), color=(255, 255, 255), alpha=.75, static=True)
                 et.draw_image(sec_texture, (width + side * sec_width / 2 + 10, screen_size[1] - 16), (sec_texture["width"], sec_texture["height"]), color=(0, 0, 0), alpha=1, static=True)
-                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(0, 0, 0), alpha=1, static=True)
+                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(0, 0, 0), static=True)
             else:
-                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), alpha=1, static=True)
+                et.draw_image(et.tex("pixel"), (width + 10, screen_size[1] - 16), (3, 16), color=(255, 255, 255), static=True)
 
         for idx, message in enumerate(cls.feed):
             if idx >= 8: break
@@ -660,7 +759,6 @@ class MenuManager(Entity):
         self.player_name_text_pointer = 0
         self.ask_player_name()
         random.seed(1)
-        # self.value = str(random.random())
 
     @staticmethod
     def valid_username(message):
@@ -737,8 +835,16 @@ def pre_load_game():
     Texture.set_texture("player", SOURCES / "player.png")
     Texture.set_texture("pixel", SOURCES / "pixel.png")
 
-    Texture.set_texture("grass0", SOURCES / "grass0.png", True)
-    Texture.set_texture("grass1", SOURCES / "grass1.png", True)
+    Texture.set_texture("grass0", SOURCES / "f0.png", True)
+    Texture.set_texture("grass1", SOURCES / "f1.png", True)
+    Texture.set_texture("grass2", SOURCES / "f2.png", True)
+    Texture.set_texture("grass3", SOURCES / "f3.png", True)
+    Texture.set_texture("grass4", SOURCES / "f4.png", True)
+    Texture.set_texture("grass5", SOURCES / "f5.png", True)
+    Texture.set_texture("grass6", SOURCES / "f6.png", True)
+    Texture.set_texture("grass7", SOURCES / "f7.png", True)
+    Texture.set_texture("grass8", SOURCES / "f8.png", True)
+    Texture.set_texture("grass9", SOURCES / "f9.png", True)
     Texture.set_texture("sand0", SOURCES / "sand.png", True)
 
     Texture.set_texture("slime0", SOURCES / "entities" / "slime" / "slime0.png")
@@ -756,7 +862,7 @@ def pre_load_game():
     cam = Camera.get_main_camera()
     cam.set_scale((5, 5))
 
-    Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y)
+    Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y, K_u)
 
     Testing.set_def_cap(1000)
 

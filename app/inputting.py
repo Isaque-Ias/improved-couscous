@@ -6,6 +6,7 @@ class Input:
     _keys = {}
     _input = False
     _focus = False
+    _mouse = {"0": [False] * 3, "1": [False] * 3, "2": [False] * 3}
 
     @classmethod
     def set_caps(cls, value):
@@ -46,6 +47,22 @@ class Input:
 
                 cls._keys[inp][2] = False
 
+        buttons = pg.mouse.get_pressed()
+        for inp in cls._mouse:
+            cls._mouse[inp][0] = False
+            cls._mouse[inp][1] = False
+
+            if buttons[int(inp)]:
+                if not cls._mouse[inp][2]:
+                    cls._mouse[inp][0] = True
+
+                cls._mouse[inp][2] = True
+            else:
+                if cls._mouse[inp][2]:
+                    cls._mouse[inp][1] = True
+
+                cls._mouse[inp][2] = False
+
     @classmethod
     def get_keys(cls):
         return cls._keys
@@ -61,6 +78,18 @@ class Input:
     @classmethod
     def get_press(cls, key):
         return cls._keys[key][2]
+
+    @classmethod
+    def mouse_pressed(cls, key):
+        return cls._mouse[str(key)][0]
+        
+    @classmethod
+    def mouse_released(cls, key):
+        return cls._mouse[str(key)][1]
+
+    @classmethod
+    def mouse_press(cls, key):
+        return cls._mouse[str(key)][2]
     
 class InputListener:
     pressed_modifiers = set()

@@ -5,11 +5,11 @@ class Texture:
     _textures = {}
     
     @classmethod
-    def set_texture(cls, name, path, py_surf=False):
+    def set_texture(cls, name, path, save_as_py_surf=False):
         if not cls._textures.get(path) == None:
             raise KeyError
             
-        if py_surf:
+        if save_as_py_surf:
             surface = pg.image.load(path)
             width, height = surface.get_size()
             cls._textures[name] = {"texture": surface, "width": width, "height": height}

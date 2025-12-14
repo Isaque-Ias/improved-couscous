@@ -3,7 +3,6 @@ from shaders import ShaderHandler
 from texture import Texture
 from camera import Camera
 from OpenGL.GL import *
-import bisect
 
 class EntityTools:
     _default_shaders = ShaderHandler.add_shader_file("def")
@@ -34,13 +33,13 @@ class EntityTools:
         ShaderHandler.render(entity.get_mvp(), Texture.get_texture(entity.image))
 
     @classmethod
-    def draw_image(cls, image, pos, scale, angle=0, color=(1, 1, 1), alpha=1, static=False, program=None):
+    def draw_image(cls, image, pos, scale, angle=0, color=(1, 1, 1), alpha=1, static=False, program=None, unit=GL_TEXTURE0):
         if not program == None:
             ShaderHandler.set_shader(program)
 
         ShaderHandler.set_uniform_value("u_color", "4f", color[0], color[1], color[2], alpha)
         mvp = Transformation.affine_transform(pos, scale, angle, static)
-        ShaderHandler.render(mvp, image)
+        ShaderHandler.render(mvp, image, unit)
 
     @classmethod
     def set_font(cls, font):

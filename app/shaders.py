@@ -22,7 +22,7 @@ class ShaderHandler:
         "1fv": glUniform1fv,
         "2fv": glUniform2fv,
         "3fv": glUniform3fv,
-        "4fv": glUniform4fv,
+        "4fv": glUniform4fv
     }
 
     _CWD = Path.cwd()
@@ -168,8 +168,6 @@ class ShaderHandler:
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                     GL_RGBA, GL_UNSIGNED_BYTE, image)
 
-        glBindTexture(GL_TEXTURE_2D, 0)
-
         value = {"texture": tex_id, "width": width, "height": height}
 
         if not occupation == None:
@@ -215,8 +213,8 @@ class ShaderHandler:
         return VAO, EBO
     
     @classmethod
-    def render(cls, mvp, texture):
+    def render(cls, mvp, texture, unit=GL_TEXTURE0):
         glUniformMatrix4fv(cls.u_mvp_loc, 1, GL_FALSE, mvp)
-        glActiveTexture(GL_TEXTURE0)
+        glActiveTexture(unit)
         glBindTexture(GL_TEXTURE_2D, texture["texture"])
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)

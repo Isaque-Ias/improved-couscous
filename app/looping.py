@@ -21,6 +21,7 @@ class GameLoop:
     _resizable = False
     _fullscreenable = False
     _flags = None
+    debug_time = False
 
     @classmethod
     def set_can_fullscreen(cls, value):
@@ -122,10 +123,10 @@ class GameLoop:
 
             entities = EntityManager.get_all_entities()
             content_layers = EntityManager.get_content_layers()
-            # if Input.get_pressed(K_y):
-            for layer in content_layers:
-                for entity in entities[layer]:
-                    entity.tick()
+            if Input.get_pressed(K_y) or not cls.debug_time:
+                for layer in content_layers:
+                    for entity in entities[layer]:
+                        entity.tick()
 
             for layer in content_layers:
                 for entity in entities[layer]:
@@ -142,7 +143,7 @@ class GameLoop:
             layer_changes = EntityManager.get_layer_changes()
             for key in layer_changes:
                 EntityManager.set_layer_change(*layer_changes[key])
-            
+        
             for event in pg.event.get():
                 mods = pg.key.get_mods()
                 if mods & pg.KMOD_CAPS:

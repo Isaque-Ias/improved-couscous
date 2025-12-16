@@ -34,7 +34,7 @@ class Map(Entity):
         self.time_vel = 1
         self.chunks = {}
         self.chunk_buffer = {}
-        self.chunk_radius = 5
+        self.chunk_radius = 10
         self.times_r = [
             (0, .03, 0),
             (0.15, .03, 0),
@@ -129,31 +129,84 @@ class Map(Entity):
     def fade(self, t):
         return t * t * t * (t * (t * 6 - 15) + 10)
 
-    def get_chunk_block(self, coordinate, chunk_idx):
-        chunk_x = chunk_idx // 8
-        chunk_y = chunk_idx % 8
-        coord_x, coord_y = coordinate
+    def perlin(self, gx, gy, grid_size):
+        cell_x = gx // grid_size
+        cell_y = gy // grid_size
+
+        lx = (gx % grid_size) / grid_size
+        ly = (gy % grid_size) / grid_size
 
         dots = []
         for corner in range(4):
             x = corner % 2
             y = corner // 2
-            ang = self.rng_float(self.seed, f"{coord_y + y},{coord_x + x}") * np.pi
-            vec = np.array([np.cos(ang), np.sin(ang)], dtype=float)
-            dx = (chunk_x / 8) - x
-            dy = (chunk_y / 8) - y
-            point_vec = np.array([dx, dy], dtype=float)
 
-            dots.append(np.dot(point_vec, vec))
+            ang = self.rng_float(
+                self.seed, f"{cell_y + y},{cell_x + x}"
+            ) * np.pi * 2
 
-        tx = self.fade(chunk_x / 8)
-        ty = self.fade(chunk_y / 8)
+            grad = np.array([np.cos(ang), np.sin(ang)], dtype=float)
 
-        interp_x_top    = dots[0] * (1 - tx) + dots[1] * tx
-        interp_x_bottom = dots[2] * (1 - tx) + dots[3] * tx
-        dot = interp_x_top * (1 - ty) + interp_x_bottom * ty
-        
-        return "sand0" if dot < 0 else "grass0"
+            dots.append((lx - x) * grad[0] + (ly - y) * grad[1])
+
+        tx = self.fade(lx)
+        ty = self.fade(ly)
+
+        top    = dots[0] * (1 - tx) + dots[1] * tx
+        bottom = dots[2] * (1 - tx) + dots[3] * tx
+
+        return top * (1 - ty) + bottom * ty
+
+    def fractal_perlin(
+        self,
+        gx,
+        gy,
+        base_grid=32,
+        octaves=3,
+        persistence=0.5
+    ):
+        value = 0.0
+        amplitude = 1.0
+        max_amp = 0.0
+        grid = base_grid
+
+        for _ in range(octaves + 1):
+            value += self.perlin(gx, gy, grid) * amplitude
+            max_amp += amplitude
+
+            amplitude *= persistence
+            grid //= 2
+
+            if grid < 1:
+                break
+
+        return value / max_amp
+
+    def get_chunk_block(
+        self,
+        coordinate,
+        chunk_idx,
+        base_grid=32,
+        octaves=3,
+        persistence=0.5
+    ):
+        chunk_size = 8
+
+        cx = chunk_idx // chunk_size
+        cy = chunk_idx % chunk_size
+
+        gx = coordinate[0] * chunk_size + cx
+        gy = coordinate[1] * chunk_size + cy
+
+        n = self.fractal_perlin(
+            gx,
+            gy,
+            base_grid=base_grid,
+            octaves=octaves,
+            persistence=persistence
+        )
+
+        return "sand0" if n < 0 else "grass0"
         
     def generate_chunk(self, t_x, t_y):
         diameter = (2 * self.chunk_radius + 1)
@@ -838,7 +891,7 @@ def pre_load_game():
     Texture.set_texture("slime10", SOURCES / "entities" / "slime" / "slime10.png")
 
     cam = Camera.get_main_camera()
-    cam.set_scale((2, 2))
+    cam.set_scale((0.5, 0.5))
 
     Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y, K_u)
 

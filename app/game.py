@@ -15,7 +15,7 @@ from texture import Texture
 from camera import Camera
 from testing import Testing
 import math
-from math import cos, sin, pi
+from math import cos
 import numpy as np
 import bisect
 
@@ -34,7 +34,7 @@ class Map(Entity):
         self.time_vel = 1
         self.chunks = {}
         self.chunk_buffer = {}
-        self.chunk_radius = 2
+        self.chunk_radius = 5
         self.times_r = [
             (0, .03, 0),
             (0.15, .03, 0),
@@ -103,10 +103,11 @@ class Map(Entity):
     def get_chunk_coords(self, coords):
         w = 16
         h = 8
-        t_x = coords[0] / w - ((coords[0] * h / w - coords[1]) / (2 * h))
-        t_y = (coords[0] * h / w - coords[1]) / (2 * h)
+        t_x = coords[0] / w - ((coords[0] * h / w + coords[1]) / (2 * h))
+        t_y = (coords[0] * h / w + coords[1]) / (2 * h)
         t_x = int((t_x - 4) // 8) + 1
         t_y = int((t_y - 4) // 8) + 1
+
         return t_x, t_y
 
     def tick(self):
@@ -137,8 +138,7 @@ class Map(Entity):
         for corner in range(4):
             x = corner % 2
             y = corner // 2
-            ang = self.rng_float(self.seed, f"{coord_x + x},{coord_y + y}") * np.pi
-
+            ang = self.rng_float(self.seed, f"{coord_y + y},{coord_x + x}") * np.pi
             vec = np.array([np.cos(ang), np.sin(ang)], dtype=float)
             dx = (chunk_x / 8) - x
             dy = (chunk_y / 8) - y
@@ -153,15 +153,7 @@ class Map(Entity):
         interp_x_bottom = dots[2] * (1 - tx) + dots[3] * tx
         dot = interp_x_top * (1 - ty) + interp_x_bottom * ty
         
-        return f"grass{int((dot+1) * 5)}"
-        # self.rng_float(
-        #     self.seed,
-        #     self.hash_string(f"{coord_x},{coord_y},{chunk_idx}")
-        # )
-        # [et.tex("grass0")["texture"],
-        # et.tex("grass1")["texture"],
-        # et.tex("sand0")["texture"]]
-        # [ * 3)
+        return "sand0" if dot < 0 else "grass0"
         
     def generate_chunk(self, t_x, t_y):
         diameter = (2 * self.chunk_radius + 1)
@@ -249,7 +241,7 @@ class Map(Entity):
             hw = 32 * 8 // 2
             hh = (15 + 1) * 8 // 2
             chunk_draw_x = hw * chunk_x + hw * chunk_y
-            chunk_draw_y = hh * chunk_x - hh * chunk_y
+            chunk_draw_y = hh * chunk_y - hh * chunk_x 
 
             et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, (15 + 1) * 8 - 1 + 0.1), 0)
 
@@ -267,8 +259,8 @@ class Map(Entity):
         atlas = Image.new("RGBA", (atlas_w, atlas_h))
 
         for i, tile in enumerate(tiles):
-            x_grid = (i % cols)
-            y_grid = (i // cols)
+            x_grid = i % cols
+            y_grid = i // cols
             hh = (tile_h // 2 + 1)
             hw = tile_w // 2
             x = hw * x_grid + hw * y_grid
@@ -794,12 +786,6 @@ class MenuManager(Entity):
             EntityManager.remove_entity_layer(self)
 
     def draw_gui(self):
-        # screen_size = et.get_screen_size()
-        # ShaderHandler.set_shader("screen")
-        # et.set_font(self.chat_font)
-        # et.draw_text(self.value, (screen_size[0] / 2, screen_size[1] / 2), (1, 1), color=(255, 255, 255), alpha=1, static=True, occupation="username_text", align=[0, -1])
-        # return
-
         screen_size = et.get_screen_size()
         ShaderHandler.set_shader("screen")
         et.set_font(self.chat_font)
@@ -835,16 +821,8 @@ def pre_load_game():
     Texture.set_texture("player", SOURCES / "player.png")
     Texture.set_texture("pixel", SOURCES / "pixel.png")
 
-    Texture.set_texture("grass0", SOURCES / "f0.png", True)
-    Texture.set_texture("grass1", SOURCES / "f1.png", True)
-    Texture.set_texture("grass2", SOURCES / "f2.png", True)
-    Texture.set_texture("grass3", SOURCES / "f3.png", True)
-    Texture.set_texture("grass4", SOURCES / "f4.png", True)
-    Texture.set_texture("grass5", SOURCES / "f5.png", True)
-    Texture.set_texture("grass6", SOURCES / "f6.png", True)
-    Texture.set_texture("grass7", SOURCES / "f7.png", True)
-    Texture.set_texture("grass8", SOURCES / "f8.png", True)
-    Texture.set_texture("grass9", SOURCES / "f9.png", True)
+    Texture.set_texture("grass0", SOURCES / "grass0.png", True)
+    Texture.set_texture("grass1", SOURCES / "grass1.png", True)
     Texture.set_texture("sand0", SOURCES / "sand.png", True)
 
     Texture.set_texture("slime0", SOURCES / "entities" / "slime" / "slime0.png")

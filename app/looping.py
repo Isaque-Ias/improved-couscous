@@ -6,6 +6,7 @@ from entity import EntityManager
 from inputting import Input
 from linear_alg import Transformation
 import os
+from testing import Testing
 
 class GameLoop:
     pg.init()
@@ -21,6 +22,7 @@ class GameLoop:
     _resizable = False
     _fullscreenable = False
     _flags = None
+    debug = False
     debug_time = False
 
     @classmethod
@@ -121,6 +123,9 @@ class GameLoop:
             ShaderHandler.set_shader("def")
             ShaderHandler.set_uniform_value("u_texture", "1i", 0)
 
+            if cls.debug:
+                Testing.cummulation_start()
+                
             entities = EntityManager.get_all_entities()
             content_layers = EntityManager.get_content_layers()
             if Input.get_pressed(K_y) or not cls.debug_time:
@@ -179,6 +184,9 @@ class GameLoop:
                             screen_value = (cls.view_width, cls.view_height)
                             pg.display.set_mode(screen_value, pg.FULLSCREEN | cls.get_flags())
                             cls.update_screen_size(screen_value)
+
+            if cls.debug:
+                Testing.cummulation_end()
 
             pg.display.flip()
             clock.tick(cls.get_fps())

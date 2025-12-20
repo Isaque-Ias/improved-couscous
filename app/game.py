@@ -32,9 +32,17 @@ class Map(Entity):
         self.time = 7000
         self.time_cap = 24000
         self.time_vel = 1
+
+        self._block_cache = {}
+
         self.chunks = {}
         self.chunk_buffer = {}
-        self.chunk_radius = 10
+        self.chunk_radius = 2
+        self.chunk_size = 8
+        self.t_x, self.t_y = 0, 0
+        self.prune_job, self.chunk_job = None, None
+        self.old_cam_size = 0
+
         self.times_r = [
             (0, .03, 0),
             (0.15, .03, 0),
@@ -66,10 +74,6 @@ class Map(Entity):
             (1, .03, 0),
         ]
         self.time_color = (1,1,1)
-
-        self.t_x = 0
-        self.t_y = 0
-        self.chunk_job = None
 
         self.seed = int(random.random() * 10000)
 
@@ -105,8 +109,8 @@ class Map(Entity):
         h = 8
         t_x = coords[0] / w - ((coords[0] * h / w + coords[1]) / (2 * h))
         t_y = (coords[0] * h / w + coords[1]) / (2 * h)
-        t_x = int((t_x - 4) // 8) + 1
-        t_y = int((t_y - 4) // 8) + 1
+        t_x = int((t_x - self.chunk_size // 2) // self.chunk_size) + 1
+        t_y = int((t_y - self.chunk_size // 2) // self.chunk_size) + 1
 
         return t_x, t_y
 
@@ -122,9 +126,19 @@ class Map(Entity):
 
         self.t_x = t_x
         self.t_y = t_y
+        
+        cam_size = Camera.get_main_camera().get_scale()[0]
+        if cam_size != self.old_cam_size:
+            self.chunk_job = None
+            self.prune_job = None
+            # self.chunk_buffer = {}
+            self._block_cache = {}
+        self.old_cam_size = cam_size
 
-    def prune_chunks(self):
-        self.chunk_buffer = {}
+        self.chunk_size = 2
+        while self.chunk_size <= 16 // cam_size:
+            self.chunk_size *= 2
+        self.chunk_radius = int(64 / (cam_size * self.chunk_size))
 
     def fade(self, t):
         return t * t * t * (t * (t * 6 - 15) + 10)
@@ -163,7 +177,9 @@ class Map(Entity):
         gy,
         base_grid=32,
         octaves=3,
-        persistence=0.5
+        persistence=0.5,
+        scaling=2
+
     ):
         value = 0.0
         amplitude = 1.0
@@ -175,70 +191,118 @@ class Map(Entity):
             max_amp += amplitude
 
             amplitude *= persistence
-            grid //= 2
+            grid //= scaling
 
             if grid < 1:
                 break
 
         return value / max_amp
 
+    @staticmethod
+    def coordinate_to_key(coordinate):
+        return (coordinate[0],coordinate[1])
+
+    @staticmethod
+    def key_to_coordinate(key):
+        key_x, key_y = key
+        return key_x, key_y
+
     def get_chunk_block(
         self,
         coordinate,
         chunk_idx,
-        base_grid=32,
-        octaves=3,
-        persistence=0.5
+        base_grid=128,
+        octaves=2,
+        persistence=0.5,
+        scaling=4
     ):
-        chunk_size = 8
+        cx = chunk_idx // self.chunk_size
+        cy = chunk_idx % self.chunk_size
 
-        cx = chunk_idx // chunk_size
-        cy = chunk_idx % chunk_size
-
-        gx = coordinate[0] * chunk_size + cx
-        gy = coordinate[1] * chunk_size + cy
+        gx = coordinate[0] * self.chunk_size + cx
+        gy = coordinate[1] * self.chunk_size + cy
 
         n = self.fractal_perlin(
             gx,
             gy,
             base_grid=base_grid,
             octaves=octaves,
-            persistence=persistence
+            persistence=persistence,
+            scaling=scaling
         )
+        n = np.clip(n * 3, -1, 1) + 1 - (abs(gx) ** 2 + abs(gy) ** 2) ** 0.5 / 120
+        if n < -1:
+            return [("sand0", 1), ("water", -(math.floor(n * 25) / 25 + 1) * 2)]
+        return [("sand0", 1)] if n < -0.75 else [("grass0", 1)]
+    
+    def prune_chunks(self, t_x, t_y):
+        remove = []
+        for key in self.chunk_buffer.keys():
+            key_x, key_y = map(int, key.split(","))
+            dif_x = abs(key_x - t_x)
+            dif_y = abs(key_y - t_y)
+            if dif_x > self.chunk_radius + 3 or dif_y > self.chunk_radius + 3:
+                remove.append(key)
+        for key in remove:
+            self.chunk_buffer.pop(key)
 
-        return "sand0" if n < 0 else "grass0"
-        
+            ShaderHandler.remove_texture(f"chunk:{key}")
+            yield
+
     def generate_chunk(self, t_x, t_y):
         diameter = (2 * self.chunk_radius + 1)
-        for idx in range(diameter ** 2):
+
+        screen_size = et.get_screen_size()
+        cam = Camera.get_main_camera()
+        cam_wid, cam_hei = cam.get_scale()
+        view_wid, view_hei = (screen_size[0], screen_size[1])
+        hw = 32 * self.chunk_size // 2
+        hh = (15 + 1) * self.chunk_size // 2
+
+        for idx in range(int(diameter ** 2)):
             x = (idx % diameter) - self.chunk_radius
             y = idx // diameter - self.chunk_radius
             key = f"{t_x + x},{t_y + y}"
-            if key not in self.chunk_buffer:
-                chunk_sprites = [et.tex(self.get_chunk_block((t_x + x, t_y + y), i))["texture"] for i in range(64)]
+            if key in self.chunk_buffer:
+                continue
 
-                atlas_tex = self.build_chunk_atlas(chunk_sprites, 32, 15)
-                self.chunk_buffer[key] = [atlas_tex, (x, y)]
+            chunk_x, chunk_y = t_x + x, t_y + y
 
+            chunk_draw_x = hw * chunk_x + hw * chunk_y
+            chunk_draw_y = hh * chunk_y - hh * chunk_x
+            if abs(chunk_draw_x - player.x) > view_wid / cam_wid + hw or abs(chunk_draw_y - player.y) > view_hei / cam_hei + hh:
+                continue
+
+            chunk_sprites = []
+            for i in range(int(self.chunk_size ** 2)):
+                sprite = self.get_chunk_block((t_x + x, t_y + y), i)
+                chunk_sprites.append(sprite)
+                if i % 100 == 0:
+                    yield
+
+            atlas_tex = self.build_chunk_atlas(chunk_sprites, 32, 15)
+            chunk_tex = ShaderHandler.add_texture(
+                        atlas_tex,
+                        occupation=f"chunk:{t_x + x},{t_y + y}"
+                    )
+            self.chunk_buffer[key] = chunk_tex
             yield
 
     def update_chunks(self, t_x, t_y):
+        if self.prune_job is None:
+            self.prune_job = self.prune_chunks(t_x, t_y)
         if self.chunk_job is None:
-            self.prune_chunks()
             self.chunk_job = self.generate_chunk(t_x, t_y)
+
+        try:
+            next(self.prune_job)
+        except StopIteration:
+            self.prune_job = None
 
         try:
             next(self.chunk_job)
         except StopIteration:
             self.chunk_job = None
-            self.chunks = {}
-            for key in self.chunk_buffer:
-                atlas_tex = self.chunk_buffer[key][0]
-                x, y = self.chunk_buffer[key][1]
-                self.chunks[key] = ShaderHandler.add_texture(
-                    atlas_tex,
-                    occupation=f"chunk:{x},{y}"
-                )
             
     def draw(self):
         pass
@@ -287,29 +351,32 @@ class Map(Entity):
         ShaderHandler.set_uniform_value("u_lights", "4fv", *(len(lights_pos), flat_pos))
         ShaderHandler.set_uniform_value("u_lights_color", "3fv", *(len(lights_color), flat_color))
         ShaderHandler.set_uniform_value("u_count_lights", "1i", len(lights_pos))
-        
-        for key in self.chunks.keys():
+
+        hw = 32 * self.chunk_size // 2
+        hh = (15 + 1) * self.chunk_size // 2
+        cam = Camera.get_main_camera()
+        cam_wid, cam_hei = cam.get_scale()
+        view_wid, view_hei = (screen_size[0], screen_size[1])
+
+        for key in self.chunk_buffer.keys():
             chunk_x, chunk_y = map(int, key.split(","))
 
-            hw = 32 * 8 // 2
-            hh = (15 + 1) * 8 // 2
             chunk_draw_x = hw * chunk_x + hw * chunk_y
-            chunk_draw_y = hh * chunk_y - hh * chunk_x 
+            chunk_draw_y = hh * chunk_y - hh * chunk_x
+            if abs(chunk_draw_x - player.x) > view_wid / cam_wid + hw or abs(chunk_draw_y - player.y) > view_hei / cam_hei + hh:
+                continue
 
-            et.draw_image(self.chunks[key], (chunk_draw_x, chunk_draw_y), (32 * 8 + 0.1, (15 + 1) * 8 - 1 + 0.1), 0)
-
-    def pg_surface_to_pil(self, surface):
-        data = pg.image.tostring(surface, "RGBA", True)
-        width, height = surface.get_size()
-        return Image.frombytes("RGBA", (width, height), data)
+            et.draw_image(self.chunk_buffer[key], (chunk_draw_x, chunk_draw_y), (32 * self.chunk_size + 0.1, (15 + 1) * self.chunk_size - 1 + 0.1), 0)
 
     def build_chunk_atlas(self, tiles, tile_w, tile_h):
-        cols = 8
-        rows = 8
+        factor = min(max(1, 2 // Camera.get_main_camera().get_scale()[0]), 8)
+        tile_w = int(tile_w / factor)
+        tile_h = int(tile_h / factor)
+        cols = int(self.chunk_size)
+        rows = int(self.chunk_size)
         atlas_w = cols * tile_w
         atlas_h = rows * (tile_h + 1) - 1
-        
-        atlas = Image.new("RGBA", (atlas_w, atlas_h))
+        atlas = Image.new("RGBA", (int(atlas_w), int(atlas_h)))
 
         for i, tile in enumerate(tiles):
             x_grid = i % cols
@@ -318,7 +385,27 @@ class Map(Entity):
             hw = tile_w // 2
             x = hw * x_grid + hw * y_grid
             y = hh * x_grid - hh * y_grid + atlas_h // 2 - tile_h // 2
-            atlas.paste(self.pg_surface_to_pil(tile), (x, y), self.pg_surface_to_pil(tile))
+
+            final_tile = self._block_cache.get(str(tile))
+            if final_tile is None:
+                for tile_tex in tile:
+                    texture = et.tex(tile_tex[0])["texture"]
+                    tile_v = texture
+                    alpha = tile_tex[1]
+                    if factor > 1:
+                        tile_v = texture.resize((max(1, tile_w), max(1, tile_h)), Image.NEAREST)
+                    if alpha < 1.0:
+                        tile_v = tile_v.copy()
+                        tile_v.putalpha(tile_v.getchannel("A").point(lambda a: int(a * alpha)))
+
+                    if final_tile is None:
+                        final_tile = tile_v
+                    else:
+                        final_tile.paste(tile_v, (0, 0), tile_v)
+                        
+                self._block_cache[str(tile)] = final_tile
+
+            atlas.paste(final_tile, (x, y), final_tile)
 
         return atlas
 
@@ -370,7 +457,7 @@ class Player(Entity):
             self.interp_time -= 1
 
         if self.controllable:
-            if Input.get_press(K_ESCAPE):
+            if Input.get_pressed(K_ESCAPE) and not Commander.showing_chat:
                 GameLoop.end()
 
             if Input.get_press(K_t) and not Commander.showing_chat:
@@ -709,7 +796,7 @@ class Commander(Entity):
                             break
                     if passed:
                         passed_entities.append(entity)
-            print(passed_entities)
+            
             return passed_entities
 
     @classmethod
@@ -874,9 +961,10 @@ def pre_load_game():
     Texture.set_texture("player", SOURCES / "player.png")
     Texture.set_texture("pixel", SOURCES / "pixel.png")
 
-    Texture.set_texture("grass0", SOURCES / "grass0.png", True)
-    Texture.set_texture("grass1", SOURCES / "grass1.png", True)
-    Texture.set_texture("sand0", SOURCES / "sand.png", True)
+    Texture.set_texture("grass0", SOURCES / "grass0.png", "pil")
+    Texture.set_texture("grass1", SOURCES / "grass1.png", "pil")
+    Texture.set_texture("sand0", SOURCES / "sand.png", "pil")
+    Texture.set_texture("water", SOURCES / "water0.png", "pil")
 
     Texture.set_texture("slime0", SOURCES / "entities" / "slime" / "slime0.png")
     Texture.set_texture("slime1", SOURCES / "entities" / "slime" / "slime1.png")
@@ -891,10 +979,11 @@ def pre_load_game():
     Texture.set_texture("slime10", SOURCES / "entities" / "slime" / "slime10.png")
 
     cam = Camera.get_main_camera()
-    cam.set_scale((0.5, 0.5))
+    cam.set_scale((5, 5))
 
     Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y, K_u)
 
+    GameLoop.debug = True
     Testing.set_def_cap(1000)
 
     GameLoop.set_background_color((0.0, 0.0, 0.0, 0.0))
@@ -906,6 +995,8 @@ if __name__ == "__main__":
 
     GameLoop.start()
 
+    print(Testing.get_relatory())
+    
 """
 tree algo:
 tree trunk is base. Generate tree like a tree.

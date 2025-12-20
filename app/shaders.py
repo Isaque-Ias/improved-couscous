@@ -120,6 +120,11 @@ class ShaderHandler:
         params = [u] + value
         func(*params)
 
+    @classmethod
+    def remove_texture(cls, occupation):
+        glDeleteTextures([cls._occupated_textures[occupation]["texture"]])
+        cls._occupated_textures.pop(occupation)
+
     @staticmethod
     def replace_texture(tex_id, texture, is_py_surf=False):
         glBindTexture(GL_TEXTURE_2D, tex_id)

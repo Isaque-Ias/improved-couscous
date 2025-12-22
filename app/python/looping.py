@@ -86,6 +86,8 @@ class GameLoop:
     def set_screen_size(cls, size):
         if not cls.get_fullscreen():
             cls._screen_size = size
+        if size == (cls.view_width, cls.view_height):
+            cls.set_fullscreen(True)
 
     @classmethod
     def get_screen_size(cls):

@@ -18,6 +18,7 @@ import math
 from math import cos
 import numpy as np
 import bisect
+from game.chunk_generation import Chunk
 
 CWD = Path.cwd()
 SOURCES = CWD / "app" / "sources"
@@ -34,6 +35,7 @@ class Map(Entity):
         self.time_vel = 1
 
         self._block_cache = {}
+        self._perlin_cache = {}
 
         self.chunks = {}
         self.chunk_buffer = {}
@@ -79,39 +81,13 @@ class Map(Entity):
 
         self.shaders = ShaderHandler.get_shader_program("map")
 
-    @staticmethod
-    def rng(seed: int, value: int) -> int:
-        x = value
-        x ^= seed * 0x9E3779B9
-        x ^= x >> 16
-        x *= 0x85EBCA6B
-        x ^= x >> 13
-        x *= 0xC2B2AE35
-        x ^= x >> 16
-        return x & 0xFFFFFFFF
-
-    def rng_float(self, seed, value):
-        if isinstance(value, str):
-            value = self.hash_string(value)
-        return self.rng(seed, value) / 2**32
-    
-    @staticmethod
-    def hash_string(s: str) -> int:
-        h = 2166136261
-        for c in s:
-            h ^= ord(c)
-            h *= 16777619
-            h &= 0xFFFFFFFF
-        return h
-    
     def get_chunk_coords(self, coords):
         w = 16
         h = 8
-        t_x = coords[0] / w - ((coords[0] * h / w + coords[1]) / (2 * h))
-        t_y = (coords[0] * h / w + coords[1]) / (2 * h)
+        t_x = coords[0] / w - ((coords[0] * h / w - coords[1]) / (2 * h))
+        t_y = (coords[0] * h / w - coords[1]) / (2 * h)
         t_x = int((t_x - self.chunk_size // 2) // self.chunk_size) + 1
         t_y = int((t_y - self.chunk_size // 2) // self.chunk_size) + 1
-
         return t_x, t_y
 
     def tick(self):
@@ -131,7 +107,7 @@ class Map(Entity):
         if cam_size != self.old_cam_size:
             self.chunk_job = None
             self.prune_job = None
-            # self.chunk_buffer = {}
+            self.chunk_buffer = {}
             self._block_cache = {}
         self.old_cam_size = cam_size
 
@@ -140,113 +116,18 @@ class Map(Entity):
             self.chunk_size *= 2
         self.chunk_radius = int(64 / (cam_size * self.chunk_size))
 
-    def fade(self, t):
-        return t * t * t * (t * (t * 6 - 15) + 10)
-
-    def perlin(self, gx, gy, grid_size):
-        cell_x = gx // grid_size
-        cell_y = gy // grid_size
-
-        lx = (gx % grid_size) / grid_size
-        ly = (gy % grid_size) / grid_size
-
-        dots = []
-        for corner in range(4):
-            x = corner % 2
-            y = corner // 2
-
-            ang = self.rng_float(
-                self.seed, f"{cell_y + y},{cell_x + x}"
-            ) * np.pi * 2
-
-            grad = np.array([np.cos(ang), np.sin(ang)], dtype=float)
-
-            dots.append((lx - x) * grad[0] + (ly - y) * grad[1])
-
-        tx = self.fade(lx)
-        ty = self.fade(ly)
-
-        top    = dots[0] * (1 - tx) + dots[1] * tx
-        bottom = dots[2] * (1 - tx) + dots[3] * tx
-
-        return top * (1 - ty) + bottom * ty
-
-    def fractal_perlin(
-        self,
-        gx,
-        gy,
-        base_grid=32,
-        octaves=3,
-        persistence=0.5,
-        scaling=2
-
-    ):
-        value = 0.0
-        amplitude = 1.0
-        max_amp = 0.0
-        grid = base_grid
-
-        for _ in range(octaves + 1):
-            value += self.perlin(gx, gy, grid) * amplitude
-            max_amp += amplitude
-
-            amplitude *= persistence
-            grid //= scaling
-
-            if grid < 1:
-                break
-
-        return value / max_amp
-
-    @staticmethod
-    def coordinate_to_key(coordinate):
-        return (coordinate[0],coordinate[1])
-
-    @staticmethod
-    def key_to_coordinate(key):
-        key_x, key_y = key
-        return key_x, key_y
-
-    def get_chunk_block(
-        self,
-        coordinate,
-        chunk_idx,
-        base_grid=128,
-        octaves=2,
-        persistence=0.5,
-        scaling=4
-    ):
-        cx = chunk_idx // self.chunk_size
-        cy = chunk_idx % self.chunk_size
-
-        gx = coordinate[0] * self.chunk_size + cx
-        gy = coordinate[1] * self.chunk_size + cy
-
-        n = self.fractal_perlin(
-            gx,
-            gy,
-            base_grid=base_grid,
-            octaves=octaves,
-            persistence=persistence,
-            scaling=scaling
-        )
-        n = np.clip(n * 3, -1, 1) + 1 - (abs(gx) ** 2 + abs(gy) ** 2) ** 0.5 / 120
-        if n < -1:
-            return [("sand0", 1), ("water", -(math.floor(n * 25) / 25 + 1) * 2)]
-        return [("sand0", 1)] if n < -0.75 else [("grass0", 1)]
-    
     def prune_chunks(self, t_x, t_y):
         remove = []
         for key in self.chunk_buffer.keys():
-            key_x, key_y = map(int, key.split(","))
+            key_x, key_y = key
             dif_x = abs(key_x - t_x)
             dif_y = abs(key_y - t_y)
-            if dif_x > self.chunk_radius + 3 or dif_y > self.chunk_radius + 3:
+            if dif_x > self.chunk_radius or dif_y > self.chunk_radius:
                 remove.append(key)
         for key in remove:
             self.chunk_buffer.pop(key)
 
-            ShaderHandler.remove_texture(f"chunk:{key}")
+            ShaderHandler.remove_texture(key)
             yield
 
     def generate_chunk(self, t_x, t_y):
@@ -258,32 +139,24 @@ class Map(Entity):
         view_wid, view_hei = (screen_size[0], screen_size[1])
         hw = 32 * self.chunk_size // 2
         hh = (15 + 1) * self.chunk_size // 2
-
         for idx in range(int(diameter ** 2)):
             x = (idx % diameter) - self.chunk_radius
             y = idx // diameter - self.chunk_radius
-            key = f"{t_x + x},{t_y + y}"
+            key = (t_x + x, t_y + y)
             if key in self.chunk_buffer:
                 continue
 
             chunk_x, chunk_y = t_x + x, t_y + y
 
             chunk_draw_x = hw * chunk_x + hw * chunk_y
-            chunk_draw_y = hh * chunk_y - hh * chunk_x
+            chunk_draw_y = hh * chunk_x - hh * chunk_y
             if abs(chunk_draw_x - player.x) > view_wid / cam_wid + hw or abs(chunk_draw_y - player.y) > view_hei / cam_hei + hh:
                 continue
 
-            chunk_sprites = []
-            for i in range(int(self.chunk_size ** 2)):
-                sprite = self.get_chunk_block((t_x + x, t_y + y), i)
-                chunk_sprites.append(sprite)
-                if i % 100 == 0:
-                    yield
-
-            atlas_tex = self.build_chunk_atlas(chunk_sprites, 32, 15)
+            atlas_tex = Chunk.generate_chunk(self.seed, chunk_x, chunk_y, self.chunk_size)
             chunk_tex = ShaderHandler.add_texture(
                         atlas_tex,
-                        occupation=f"chunk:{t_x + x},{t_y + y}"
+                        occupation=key
                     )
             self.chunk_buffer[key] = chunk_tex
             yield
@@ -355,16 +228,12 @@ class Map(Entity):
         hw = 32 * self.chunk_size // 2
         hh = (15 + 1) * self.chunk_size // 2
         cam = Camera.get_main_camera()
-        cam_wid, cam_hei = cam.get_scale()
-        view_wid, view_hei = (screen_size[0], screen_size[1])
 
         for key in self.chunk_buffer.keys():
-            chunk_x, chunk_y = map(int, key.split(","))
+            chunk_x, chunk_y = key
 
             chunk_draw_x = hw * chunk_x + hw * chunk_y
-            chunk_draw_y = hh * chunk_y - hh * chunk_x
-            if abs(chunk_draw_x - player.x) > view_wid / cam_wid + hw or abs(chunk_draw_y - player.y) > view_hei / cam_hei + hh:
-                continue
+            chunk_draw_y = hh * chunk_x - hh * chunk_y
 
             et.draw_image(self.chunk_buffer[key], (chunk_draw_x, chunk_draw_y), (32 * self.chunk_size + 0.1, (15 + 1) * self.chunk_size - 1 + 0.1), 0)
 
@@ -961,11 +830,6 @@ def pre_load_game():
     Texture.set_texture("player", SOURCES / "player.png")
     Texture.set_texture("pixel", SOURCES / "pixel.png")
 
-    Texture.set_texture("grass0", SOURCES / "grass0.png", "pil")
-    Texture.set_texture("grass1", SOURCES / "grass1.png", "pil")
-    Texture.set_texture("sand0", SOURCES / "sand.png", "pil")
-    Texture.set_texture("water", SOURCES / "water0.png", "pil")
-
     Texture.set_texture("slime0", SOURCES / "entities" / "slime" / "slime0.png")
     Texture.set_texture("slime1", SOURCES / "entities" / "slime" / "slime1.png")
     Texture.set_texture("slime2", SOURCES / "entities" / "slime" / "slime2.png")
@@ -979,7 +843,7 @@ def pre_load_game():
     Texture.set_texture("slime10", SOURCES / "entities" / "slime" / "slime10.png")
 
     cam = Camera.get_main_camera()
-    cam.set_scale((5, 5))
+    cam.set_scale((1, 1))
 
     Input.set_keys(K_w, K_a, K_s, K_d, K_SPACE, K_t,K_LCTRL, K_UP, K_DOWN, K_ESCAPE, K_y, K_u)
 

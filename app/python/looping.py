@@ -114,9 +114,10 @@ class GameLoop:
 
     @classmethod
     def start(cls):
+        global maped
         cls._fps = 60
         clock = pg.time.Clock()
-
+        maped = {}
         cls._running = True
         while cls._running:
             Input.update()
@@ -151,6 +152,8 @@ class GameLoop:
             for key in layer_changes:
                 EntityManager.set_layer_change(*layer_changes[key])
         
+            Input.mouse_scroll_x = 0
+            Input.mouse_scroll_y = 0
             for event in pg.event.get():
                 mods = pg.key.get_mods()
                 if mods & pg.KMOD_CAPS:
@@ -159,12 +162,27 @@ class GameLoop:
                     Input.set_caps(False)
                 if event.type == pg.QUIT:
                     cls._running = False
+                    # print("{\n" + str(maped).replace(", ", ",\n")[1:-1] + "\n}")
+                    # liste = ""
+                    # for key in maped.keys():
+                    #     liste = liste + str(key) + ", "
+                    # print(liste[:-2])
+                    # :
+                if event.type == pg.MOUSEWHEEL:
+                    Input.mouse_scroll_x = event.x
+                    Input.mouse_scroll_y = event.y
 
                 if event.type == pg.WINDOWFOCUSLOST:
                     Input.set_focus(False)
 
                 if event.type == pg.WINDOWFOCUSGAINED:
                     Input.set_focus(True)
+
+                # if event.type == pg.KEYDOWN:
+                #     if maped.get(str(event.key)) == None:
+                #         maped[str(event.key)] = time
+                #         time += 1
+                #         print(time)
 
                 if cls.get_resizable():
                     if event.type == pg.VIDEORESIZE:

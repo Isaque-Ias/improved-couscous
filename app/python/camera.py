@@ -30,7 +30,7 @@ class Cam:
         return self._name
 
 class Camera:
-    _cams = {"main": Cam((0, 0), (1500, 500), 0, "main")}
+    _cams = {"main": Cam([0, 0], [1, 1], 0, "main")}
     _main = "main"
 
     @classmethod
@@ -38,7 +38,7 @@ class Camera:
         if cls._cams.get(name):
             raise KeyError
         
-        cam = Cam((0, 0), (0, 0), 0, name)
+        cam = Cam([0, 0], [0, 0], 0, name)
         cls._cams[name] = cam
         return cam
     

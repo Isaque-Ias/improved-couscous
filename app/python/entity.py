@@ -50,11 +50,11 @@ class EntityTools:
         return cls._font
 
     @classmethod
-    def draw_text(cls, text, pos, scale, color, alpha, static, occupation, align=[0, 0]):
+    def draw_text(cls, text, pos, occupation, scale, color=(1,1,1), alpha=1, static=True, align=[0, 0]):
         font_surf = cls.get_font().render(text, True, (255, 255, 255))
         texture = ShaderHandler.add_texture(font_surf, True, occupation)
         width, height = (texture["width"], texture["height"])
-        cls.draw_image(texture, (pos[0] + width * align[0] / 2, pos[1] + height * align[1] / 2), (width * scale[0], height * scale[1]), color=color, alpha=alpha, static=static)
+        cls.draw_image(texture, (pos[0] + width * scale[0] * align[0] / 2, pos[1] + height * scale[1] * align[1] / 2), (width * scale[0], height * scale[1]), color=color, alpha=alpha, static=static)
         return texture
 
 class Entity:

@@ -3,10 +3,12 @@ from pynput import keyboard
 import pyperclip
 
 class Input:
-    _keys = {}
+    _keys = {121: [False] * 3}
     _input = False
     _focus = False
     _mouse = {"0": [False] * 3, "1": [False] * 3, "2": [False] * 3}
+    mouse_scroll_x = 0
+    mouse_scroll_y = 0
 
     @classmethod
     def set_caps(cls, value):
